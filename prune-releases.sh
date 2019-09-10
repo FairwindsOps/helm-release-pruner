@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-source _get_helm.sh
+source "$(which _get_helm.sh)"
 
 if [ -n "${DEBUG}" ]; then
     set -x
