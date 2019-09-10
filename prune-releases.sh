@@ -19,7 +19,7 @@ function usage()
     echo "Example: $0 --older-than=\"2 weeks ago\" --helm-release-filter=\"^feature-.+-web$\" --namespace-filter=\"^feature-.+\""
 }
 
-function check_helm() {
+function setup_helm() {
     if [ ${HELM_VERSION} == "" ]; then
         HELM_VERSION="v2.13.1"
     fi
@@ -34,6 +34,8 @@ older_than_filter=""
 release_filter=""
 namespace_filter=""
 dry_run=""
+
+setup_helm
 
 while [ "$1" != "" ]; do
     PARAM=`echo $1 | awk -F= '{print $1}'`
