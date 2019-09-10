@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+source _get_helm.sh
+
 if [ -n "${DEBUG}" ]; then
     set -x
 fi
@@ -15,6 +17,17 @@ function usage()
     echo '    --dry-run'
     echo ""
     echo "Example: $0 --older-than=\"2 weeks ago\" --helm-release-filter=\"^feature-.+-web$\" --namespace-filter=\"^feature-.+\""
+}
+
+function check_helm() {
+    if [ ${HELM_VERSION} == "" ]; then
+        HELM_VERSION="v2.13.1"
+    fi
+
+    _get_helm "${HELM_VERSION}"
+    _set_helm_version "${HELM_VERSION}"
+
+    echo "Set the Helm Version to ${HELM_VERSION}"
 }
 
 older_than_filter=""
