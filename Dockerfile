@@ -1,9 +1,9 @@
 FROM alpine
 
-RUN apk add --update --no-cache bash coreutils curl
+RUN apk add --update --no-cache bash coreutils curl jq
 
-ENV KUBECTL_VERSION=v1.13.10
-ENV HELM_VERSION=v2.13.1
+ENV KUBECTL_VERSION=v1.14.8
+ENV HELM_VERSION=v2.14.3
 
 RUN curl -L "https://storage.googleapis.com/kubernetes-helm/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar xzvf - -C "/tmp/" \
   && mv "/tmp/linux-amd64/helm" "/usr/local/bin/helm" \
