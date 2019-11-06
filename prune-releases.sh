@@ -93,7 +93,11 @@ while read release_line ; do
         echo "$release_line"
         counter_purge=$((counter_purge+1))
         [ -z "$dry_run" ] && helm delete --purge $release_name
-        [ -z "$dry_run" ] && kubectl delete ns $release_namespace
+
+        # Delete the namespace if there are no other helm releases in it
+        if [ -z "$(helm list --namespace $release_namespace --output json | jq ".Releases[] | select(.Name!=\"$release_name\")")" ]; then
+            [ -z "$dry_run" ] && kubectl delete ns $release_namespace
+        fi
     fi
 done < <(helm ls "$release_filter")
 [ $counter_purge -gt 0 ] || echo "No stale Helm charts found."
