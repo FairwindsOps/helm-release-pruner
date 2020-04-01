@@ -99,5 +99,5 @@ while read release_line ; do
             [ -z "$dry_run" ] && kubectl delete ns $release_namespace
         fi
     fi
-done < <(helm ls "$release_filter")
+done < <(helm ls --all-namespaces)
 [ $counter_delete -gt 0 ] || echo "No stale Helm charts found."
