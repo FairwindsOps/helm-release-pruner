@@ -59,11 +59,11 @@ fi
 older_than_filter_s=$(date --date="$older_than_filter" +%s)
 
 if [ -n "$dry_run" ]; then
-    echo "Dry run mode. Nothing will be purged."
+    echo "Dry run mode. Nothing will be deleted."
 fi
 
 counter=0
-counter_purge=0
+counter_delete=0
 while read release_line ; do
     counter=$((counter+1))
     release_date=""
@@ -91,8 +91,8 @@ while read release_line ; do
             exit 1
         fi
         echo "$release_line"
-        counter_purge=$((counter_purge+1))
-        [ -z "$dry_run" ] && helm delete --purge $release_name
+        counter_delete=$((counter_delete+1))
+        [ -z "$dry_run" ] && helm delete --namespace $release_namespace $release_name
 
         # Delete the namespace if there are no other helm releases in it
         if [ -z "$(helm list --namespace $release_namespace --output json | jq ".Releases[] | select(.Name!=\"$release_name\")")" ]; then
@@ -100,4 +100,4 @@ while read release_line ; do
         fi
     fi
 done < <(helm ls "$release_filter")
-[ $counter_purge -gt 0 ] || echo "No stale Helm charts found."
+[ $counter_delete -gt 0 ] || echo "No stale Helm charts found."
