@@ -1,0 +1,30 @@
+version: 2.1
+
+orbs:
+  rok8s-scripts: fairwinds/rok8s-scripts@11
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - rok8s-scripts/docker_build_and_push:
+          config_file: deploy/build.config
+          context: org-global
+          docker-login: true
+          password-variable: fairwinds_quay_token
+          registry: quay.io
+          enable_docker_layer_caching: true
+          username: fairwinds+circleci
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              only: /.*/
+      - rok8s-scripts/github_release:
+          requires:
+            - rok8s-scripts/docker_build_and_push
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /.*/
