@@ -72,8 +72,6 @@ if [ -n "$dry_run" ]; then
     echo "Dry run mode. Nothing will be deleted."
 fi
 
-exit 0
-
 counter=0
 counter_delete=0
 while read release_line ; do
@@ -89,6 +87,8 @@ while read release_line ; do
     # parse each release line
     if [[ $helm_version -eq 3 ]]; then
       release_date=$(echo "$release_line" | awk -F'\t' '{ print $4 }')
+      # some dates look like 2020-07-03 20:19:59.322202 -0500 -0500, and date doesn't like the second offset
+      release_date=`echo $release_date | sed 's/ [-+][[:digit:]]\+$//g'`
       release_date=`echo $release_date | sed 's/ UTC$//g'`
       release_date_s=$(date --date="$release_date" +%s)
       release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
@@ -103,20 +103,26 @@ while read release_line ; do
     if [[ "$release_date_s" -le "$older_than_filter_s" ]]; then
         # Confirm release and namespace values
         if ! [[ "$release_name" =~ $release_filter ]]; then
-            echo "Error: Release: '$release_name' does not match '$release_filter'"
-            exit 1
+            echo "Release: '$release_name' does not match '$release_filter'"
+            continue
         fi
         if ! [[ "$release_namespace" =~ $namespace_filter ]]; then
-            echo "Error: Release: '$release_name' namespace: '$release_namespace' does not match '$namespace_filter'"
-            exit 1
+            echo "Release: '$release_name' namespace: '$release_namespace' does not match '$namespace_filter'"
+            continue
         fi
         echo "$release_line"
         counter_delete=$((counter_delete+1))
         [ -z "$dry_run" ] && helm delete --namespace $release_namespace $release_name
 
         # Delete the namespace if there are no other helm releases in it
-        if [ -z "$(helm list --namespace $release_namespace --output json | jq ".Releases[] | select(.Name!=\"$release_name\")")" ]; then
-            [ -z "$dry_run" ] && kubectl delete ns $release_namespace
+        if [[ $helm_version -eq 3 ]]; then
+          if [ "$(helm list --namespace $release_namespace --output json | jq ". | length")" -eq 0 ]; then
+              [ -z "$dry_run" ] && kubectl delete ns $release_namespace
+          fi
+        else
+          if [ -z "$(helm list --namespace $release_namespace --output json | jq ".Releases[] | select(.Name!=\"$release_name\")")" ]; then
+              [ -z "$dry_run" ] && kubectl delete ns $release_namespace
+          fi
         fi
     fi
 done < <(helm ls --all-namespaces)
