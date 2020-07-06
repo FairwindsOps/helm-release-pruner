@@ -58,9 +58,21 @@ fi
 
 older_than_filter_s=$(date --date="$older_than_filter" +%s)
 
+helm_version="3"
+set +e
+helm version | grep "^Client"
+if [ $? -eq 0 ]; then
+  helm_version="2"
+fi
+set -e
+
+echo "Using Helm version $helm_version"
+
 if [ -n "$dry_run" ]; then
     echo "Dry run mode. Nothing will be deleted."
 fi
+
+exit 0
 
 counter=0
 counter_delete=0
@@ -75,10 +87,18 @@ while read release_line ; do
     if [[ "$counter" -eq 1 ]]; then continue; fi
 
     # parse each release line
-    release_date=$(echo "$release_line" | awk -F'\t' '{ print $3 }')
-    release_date_s=$(date --date="$release_date" +%s)
-    release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
-    release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $7 }' | tr -d " ")
+    if [[ $helm_version -eq 3 ]]; then
+      release_date=$(echo "$release_line" | awk -F'\t' '{ print $4 }')
+      release_date=`echo $release_date | sed 's/ UTC$//g'`
+      release_date_s=$(date --date="$release_date" +%s)
+      release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
+      release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $2 }' | tr -d " ")
+    else
+      release_date=$(echo "$release_line" | awk -F'\t' '{ print $3 }')
+      release_date_s=$(date --date="$release_date" +%s)
+      release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
+      release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $7 }' | tr -d " ")
+    fi
 
     if [[ "$release_date_s" -le "$older_than_filter_s" ]]; then
         # Confirm release and namespace values
