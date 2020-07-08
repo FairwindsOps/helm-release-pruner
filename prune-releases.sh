@@ -86,11 +86,9 @@ while read release_line ; do
     if [[ "$release_date_s" -le "$older_than_filter_s" ]]; then
         # Confirm release and namespace values
         if ! [[ "$release_name" =~ $release_filter ]]; then
-            echo "Release: '$release_name' does not match '$release_filter'"
             continue
         fi
         if ! [[ "$release_namespace" =~ $namespace_filter ]]; then
-            echo "Release: '$release_name' namespace: '$release_namespace' does not match '$namespace_filter'"
             continue
         fi
         echo "$release_line"
