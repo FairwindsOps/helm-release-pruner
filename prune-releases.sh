@@ -58,16 +58,6 @@ fi
 
 older_than_filter_s=$(date --date="$older_than_filter" +%s)
 
-helm_version="3"
-set +e
-helm version | grep "^Client"
-if [ $? -eq 0 ]; then
-  helm_version="2"
-fi
-set -e
-
-echo "Using Helm version $helm_version"
-
 if [ -n "$dry_run" ]; then
     echo "Dry run mode. Nothing will be deleted."
 fi
@@ -85,20 +75,13 @@ while read release_line ; do
     if [[ "$counter" -eq 1 ]]; then continue; fi
 
     # parse each release line
-    if [[ $helm_version -eq 3 ]]; then
-      release_date=$(echo "$release_line" | awk -F'\t' '{ print $4 }')
-      # some dates look like 2020-07-03 20:19:59.322202 -0500 -0500, and date doesn't like the second offset
-      release_date=`echo $release_date | sed 's/ [-+][[:digit:]]\+$//g'`
-      release_date=`echo $release_date | sed 's/ UTC$//g'`
-      release_date_s=$(date --date="$release_date" +%s)
-      release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
-      release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $2 }' | tr -d " ")
-    else
-      release_date=$(echo "$release_line" | awk -F'\t' '{ print $3 }')
-      release_date_s=$(date --date="$release_date" +%s)
-      release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
-      release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $7 }' | tr -d " ")
-    fi
+    release_date=$(echo "$release_line" | awk -F'\t' '{ print $4 }')
+    # some dates look like 2020-07-03 20:19:59.322202 -0500 -0500, and date doesn't like the second offset
+    release_date=`echo $release_date | sed 's/ [-+][[:digit:]]\+$//g'`
+    release_date=`echo $release_date | sed 's/ UTC$//g'`
+    release_date_s=$(date --date="$release_date" +%s)
+    release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
+    release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $2 }' | tr -d " ")
 
     if [[ "$release_date_s" -le "$older_than_filter_s" ]]; then
         # Confirm release and namespace values
@@ -115,14 +98,8 @@ while read release_line ; do
         [ -z "$dry_run" ] && helm delete --namespace $release_namespace $release_name
 
         # Delete the namespace if there are no other helm releases in it
-        if [[ $helm_version -eq 3 ]]; then
-          if [ "$(helm list --namespace $release_namespace --output json | jq ". | length")" -eq 0 ]; then
-              [ -z "$dry_run" ] && kubectl delete ns $release_namespace
-          fi
-        else
-          if [ -z "$(helm list --namespace $release_namespace --output json | jq ".Releases[] | select(.Name!=\"$release_name\")")" ]; then
-              [ -z "$dry_run" ] && kubectl delete ns $release_namespace
-          fi
+        if [ "$(helm list --namespace $release_namespace --output json | jq ". | length")" -eq 0 ]; then
+            [ -z "$dry_run" ] && kubectl delete ns $release_namespace
         fi
     fi
 done < <(helm ls --all-namespaces)
