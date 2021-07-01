@@ -9,7 +9,7 @@ function usage()
 {
     echo "$0"
     echo "    -h --help"
-    echo '    --max-releases=10'
+    echo '    --max-releases-to-keep=10'
     echo '    --older-than="4 weeks ago"                  <GNU date formatted date string>'
     echo '    --helm-release-filter="^feature-.+-web$"    <Helm release regex filter>'
     echo '    --namespace-filter="^feature-.+"            <Namespace regex filter>'
@@ -18,7 +18,7 @@ function usage()
     echo "Example: $0 --older-than=\"2 weeks ago\" --helm-release-filter=\"^feature-.+-web$\" --namespace-filter=\"^feature-.+\""
 }
 
-max_releases=""
+max_releases_to_keep=""
 older_than_filter=""
 release_filter=""
 namespace_filter=""
@@ -32,8 +32,8 @@ while [ "$1" != "" ]; do
             usage
             exit
             ;;
-        --max-releases)
-            max_releases="$VALUE"
+        --max-releases-to-keep)
+            max_releases_to_keep="$VALUE"
             ;;
         --older-than)
             older_than_filter="$VALUE"
@@ -101,7 +101,7 @@ while read release_line ; do
     if [[ "$release_date_s" -le "$older_than_filter_s" ]]; then
       should_delete=1
     fi
-    if [[ $counter_keep -gt $max_releases ]]; then
+    if [[ $counter_keep -gt $max_releases_to_keep ]]; then
       should_delete=1
     fi
 
