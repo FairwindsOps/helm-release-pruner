@@ -9,6 +9,7 @@ function usage()
 {
     echo "$0"
     echo "    -h --help"
+    echo '    --max-releases-to-keep=10'
     echo '    --older-than="4 weeks ago"                  <GNU date formatted date string>'
     echo '    --helm-release-filter="^feature-.+-web$"    <Helm release regex filter>'
     echo '    --namespace-filter="^feature-.+"            <Namespace regex filter>'
@@ -17,6 +18,7 @@ function usage()
     echo "Example: $0 --older-than=\"2 weeks ago\" --helm-release-filter=\"^feature-.+-web$\" --namespace-filter=\"^feature-.+\""
 }
 
+max_releases_to_keep=""
 older_than_filter=""
 release_filter=""
 namespace_filter=""
@@ -29,6 +31,9 @@ while [ "$1" != "" ]; do
         -h | --help)
             usage
             exit
+            ;;
+        --max-releases-to-keep)
+            max_releases_to_keep="$VALUE"
             ;;
         --older-than)
             older_than_filter="$VALUE"
@@ -52,6 +57,7 @@ while [ "$1" != "" ]; do
 done
 
 if [ -z "$older_than_filter" -o -z "$release_filter" -o -z "$namespace_filter" ]; then
+    echo "No filters found"
     usage
     exit 1
 fi
@@ -63,6 +69,7 @@ if [ -n "$dry_run" ]; then
 fi
 
 counter=0
+counter_keep=0
 counter_delete=0
 while read release_line ; do
     counter=$((counter+1))
@@ -83,14 +90,25 @@ while read release_line ; do
     release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
     release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $2 }' | tr -d " ")
 
+    if ! [[ "$release_name" =~ $release_filter ]]; then
+        continue
+    fi
+    if ! [[ "$release_namespace" =~ $namespace_filter ]]; then
+        continue
+    fi
+
+    should_delete=0
     if [[ "$release_date_s" -le "$older_than_filter_s" ]]; then
+      should_delete=1
+    fi
+    if [[ $counter_keep -gt $max_releases_to_keep ]]; then
+      should_delete=1
+    fi
+
+    if [[ $should_delete -eq 0 ]]; then
+        counter_keep=$((counter_keep+1))
+    else
         # Confirm release and namespace values
-        if ! [[ "$release_name" =~ $release_filter ]]; then
-            continue
-        fi
-        if ! [[ "$release_namespace" =~ $namespace_filter ]]; then
-            continue
-        fi
         echo "$release_line"
         counter_delete=$((counter_delete+1))
         [ -z "$dry_run" ] && helm delete --namespace $release_namespace $release_name
@@ -100,5 +118,5 @@ while read release_line ; do
             [ -z "$dry_run" ] && kubectl delete ns $release_namespace
         fi
     fi
-done < <(helm ls --all-namespaces)
+done < <(helm ls --all-namespaces --date --reverse)
 [ $counter_delete -gt 0 ] || echo "No stale Helm charts found."
