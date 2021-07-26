@@ -13,6 +13,8 @@ function usage()
     echo '    --older-than="4 weeks ago"                  <GNU date formatted date string>'
     echo '    --helm-release-filter="^feature-.+-web$"    <Helm release regex filter>'
     echo '    --namespace-filter="^feature-.+"            <Namespace regex filter>'
+    echo '    --helm-release-negate-filter="-permanent$"  <Negated Helm release regex filter>'
+    echo '    --namespace-negate-filter="-permanent$"     <Negated Namespace regex filter>'
     echo '    --dry-run'
     echo ""
     echo "Example: $0 --older-than=\"2 weeks ago\" --helm-release-filter=\"^feature-.+-web$\" --namespace-filter=\"^feature-.+\""
@@ -44,6 +46,12 @@ while [ "$1" != "" ]; do
         --namespace-filter)
             namespace_filter="$VALUE"
             ;;
+        --helm-release-negate-filter)
+            release_negate_filter="$VALUE"
+            ;;
+        --namespace-negate-filter)
+            namespace_negate_filter="$VALUE"
+            ;;
         --dry-run)
             dry_run="TRUE"
             ;;
@@ -56,7 +64,7 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z "$older_than_filter" -o -z "$release_filter" -o -z "$namespace_filter" ]; then
+if [[ -z "$older_than_filter" && -z "$release_filter" && -z "$namespace_filter" && -z "$namespace_negate_filter" && -z "$release_negate_filter" && -z "$max_releases_to_keep" ]]; then
     echo "No filters found"
     usage
     exit 1
@@ -90,11 +98,25 @@ while read release_line ; do
     release_name=$(echo "$release_line" | awk -F'\t' '{ print $1 }' | tr -d " ")
     release_namespace=$(echo "$release_line" | awk -F'\t' '{ print $2 }' | tr -d " ")
 
-    if ! [[ "$release_name" =~ $release_filter ]]; then
-        continue
+    if [[ -n "$release_filter" ]]; then
+      if ! [[ "$release_name" =~ $release_filter ]]; then
+          continue
+      fi
     fi
-    if ! [[ "$release_namespace" =~ $namespace_filter ]]; then
-        continue
+    if [[ -n "$namespace_filter" ]]; then
+      if ! [[ "$release_namespace" =~ $namespace_filter ]]; then
+          continue
+      fi
+    fi
+    if [[ -n "$release_negate_filter" ]]; then
+      if [[ "$release_name" =~ $release_negate_filter ]]; then
+          continue
+      fi
+    fi
+    if [[ -n "$namespace_negate_filter" ]]; then
+      if [[ "$release_namespace" =~ $namespace_negate_filter ]]; then
+          continue
+      fi
     fi
 
     should_delete=0
