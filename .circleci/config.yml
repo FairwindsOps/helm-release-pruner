@@ -7,9 +7,9 @@ workflows:
   version: 2
   build:
     jobs:
-      - rok8s-scripts/get_vault_env:
+      - rok8s/get_vault_env:
           vault_path: repo/global/env
-      - rok8s-scripts/get_vault_env:
+      - rok8s/get_vault_env:
           vault_path: repo/pluto/env
       - rok8s-scripts/docker_build_and_push:
           config_file: deploy/build.config
