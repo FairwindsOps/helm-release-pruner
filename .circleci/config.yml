@@ -2,11 +2,16 @@ version: 2.1
 
 orbs:
   rok8s-scripts: fairwinds/rok8s-scripts@11
+  rok8s: fairwinds/rok8s-scripts@12
 
 workflows:
   version: 2
   build:
     jobs:
+      - rok8s/get_vault_env:
+          vault_path: repo/global/env
+      - rok8s/get_vault_env:
+          vault_path: repo/helm-release-pruner/env
       - rok8s-scripts/docker_build_and_push:
           config_file: deploy/build.config
           context: org-global
