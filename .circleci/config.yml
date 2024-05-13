@@ -1,16 +1,34 @@
 version: 2.1
 
 orbs:
-  rok8s-scripts: fairwinds/rok8s-scripts@11
-  rok8s: fairwinds/rok8s-scripts@12
+  orb-tools: circleci/orb-tools@10.1.0
+  rok8s-scripts: fairwinds/rok8s-scripts@14
+
+executors:
+  golang-exec:
+    docker:
+      - image: cimg/go:1.21
+
+references:
+  install_vault_alpine: &install_vault_alpine
+    run:
+      name: install hashicorp vault
+      command: |
+        apk --update add curl yq
+        cd /tmp
+        curl -LO https://releases.hashicorp.com/vault/1.12.2/vault_1.12.2_linux_amd64.zip
+        sha256sum vault_1.12.2_linux_amd64.zip | grep 116c143de377a77a7ea455a367d5e9fe5290458e8a941a6e2dd85d92aaedba67
+        unzip vault_1.12.2_linux_amd64.zip
+        mv vault /usr/bin/vault
 
 workflows:
   version: 2
   build:
     jobs:
-      - rok8s/get_vault_env:
+      - *install_vault_alpine
+      - rok8s-scripts/get_vault_env:
           vault_path: repo/global/env
-      - rok8s/get_vault_env:
+      - rok8s-scripts/get_vault_env:
           vault_path: repo/helm-release-pruner/env
       - rok8s-scripts/docker_build_and_push:
           config_file: deploy/build.config
