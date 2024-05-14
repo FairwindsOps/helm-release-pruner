@@ -113,6 +113,12 @@ workflows:
   version: 2
   release:
     jobs:
+      - snapshot:
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              ignore: /.*/
       - release:
           filters:
             branches:
