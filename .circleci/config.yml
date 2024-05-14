@@ -34,8 +34,6 @@ jobs:
       - *install_vault_alpine
       - rok8s-scripts/get_vault_env:
           vault_path: repo/global/env
-      - rok8s-scripts/get_vault_env:
-          vault_path: repo/helm-release-pruner/env
 
 workflows:
   version: 2
