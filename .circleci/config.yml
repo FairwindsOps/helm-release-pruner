@@ -29,32 +29,14 @@ references:
         tar -zxvf circleci-cli_0.1.16535_linux_amd64.tar.gz
         mv circleci-cli_0.1.16535_linux_amd64/circleci /bin/circleci
         circleci version
-  publish-dev-orb:
-    working_directory: /go/src/github.com/fairwindsops/helm-release-pruner
-    docker:
-      - image: quay.io/reactiveops/ci-images:v12-alpine
-    shell: /bin/bash
-    steps:
-      - checkout
-      - *install_vault_alpine
-      - rok8s-scripts/get_vault_env:
-          vault_path: repo/global/env
-      - *install_circleci
-      - orb-tools/pack:
-          source: orb/
-      - orb-tools/publish:
-          orb-ref: fairwinds/helm-release-pruner@dev:${CIRCLE_BRANCH}
-          token-variable: CIRCLECI_DEV_API_TOKEN
 
 jobs:
-  release:
-    working_directory: /home/circleci/go/src/github.com/fairwindsops/helm-release-pruner
+  prep_vars:
+    working_directory: /home/circleci/src/github.com/fairwindsops/helm-release-pruner
+    docker:
+      - image: quay.io/reactiveops/ci-images:v12-alpine
     resource_class: large
     shell: /bin/bash
-    docker:
-      - image: goreleaser/goreleaser:v1.22.1
-        environment:
-          GO111MODULE: "on"
     steps:
       - checkout
       - setup_remote_docker
@@ -63,52 +45,27 @@ jobs:
           vault_path: repo/global/env
       - rok8s-scripts/get_vault_env:
           vault_path: repo/helm-release-pruner/env
-      - run:
-          name: docker login
-          command: |
-            docker login -u _json_key -p "$(echo $GCP_ARTIFACTREADWRITE_JSON_KEY | base64 -d)" us-docker.pkg.dev
-      - run: echo 'export GORELEASER_CURRENT_TAG="${CIRCLE_TAG}"' >> $BASH_ENV
-      - run: goreleaser
-  publish-dev-orb:
-    working_directory: /go/src/github.com/fairwindsops/helm-release-pruner
-    docker:
-      - image: quay.io/reactiveops/ci-images:v12-alpine
-    shell: /bin/bash
-    steps:
-      - checkout
-      - *install_vault_alpine
-      - rok8s-scripts/get_vault_env:
-          vault_path: repo/global/env
-      - *install_circleci
-  request-orb-publish:
-    docker:
-      - image: quay.io/reactiveops/ci-images:v12-alpine
-    steps:
-      - *install_vault_alpine
-      - rok8s-scripts/get_vault_env:
-          vault_path: repo/helm-release-pruner/env
-      - run:
-          name: "Request Orb Publish"
-          command: |
-            apk --update add curl
-            docker_build
-            docker_login
-            docker_push
-            curl -X POST --data-urlencode "payload={\"text\": \"Please publish a new helm-release-pruner orb by checking out $CIRCLE_TAG and running release-orb.sh\"}" $SLACK_URL
+      # - rok8s-scripts/docker_build_and_push:
+      #     password-variable: FAIRWINDS_QUAY_TOKEN
+      #     username: fairwinds+circleci
+
 workflows:
   version: 2
   release:
     jobs:
-      - release:
+      - prep_vars:
           filters:
             branches:
               ignore: /.*/
             tags:
               only: /.*/
-      - request-orb-publish:
-          name: "Request Orb Publishing"
+      - rok8s-scripts/docker_build_and_push:
+          context: org-global
           filters:
             branches:
               ignore: /.*/
             tags:
-              only: /^v.*/
+              only: /.*/
+          password-variable: FAIRWINDS_QUAY_TOKEN
+          registry: quay.io
+          username: fairwinds+circleci
