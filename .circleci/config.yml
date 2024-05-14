@@ -20,15 +20,6 @@ references:
         sha256sum vault_1.12.2_linux_amd64.zip | grep 116c143de377a77a7ea455a367d5e9fe5290458e8a941a6e2dd85d92aaedba67
         unzip vault_1.12.2_linux_amd64.zip
         mv vault /usr/bin/vault
-  install_circleci: &install_circleci
-    run:
-      name: Install CircleCI CLI
-      command: |
-        cd /tmp
-        curl -LO https://github.com/CircleCI-Public/circleci-cli/releases/download/v0.1.16535/circleci-cli_0.1.16535_linux_amd64.tar.gz
-        tar -zxvf circleci-cli_0.1.16535_linux_amd64.tar.gz
-        mv circleci-cli_0.1.16535_linux_amd64/circleci /bin/circleci
-        circleci version
 
 jobs:
   prep_vars:
@@ -45,9 +36,6 @@ jobs:
           vault_path: repo/global/env
       - rok8s-scripts/get_vault_env:
           vault_path: repo/helm-release-pruner/env
-      # - rok8s-scripts/docker_build_and_push:
-      #     password-variable: FAIRWINDS_QUAY_TOKEN
-      #     username: fairwinds+circleci
 
 workflows:
   version: 2
