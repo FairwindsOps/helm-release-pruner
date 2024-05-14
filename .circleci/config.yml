@@ -119,8 +119,6 @@ workflows:
               ignore: /.*/
             tags:
               only: /.*/
-  "Orb Test and Publish":
-    jobs:
       - request-orb-publish:
           name: "Request Orb Publishing"
           filters:
