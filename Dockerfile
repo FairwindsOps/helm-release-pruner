@@ -2,8 +2,8 @@ FROM alpine
 
 RUN apk add --update --no-cache bash coreutils curl jq
 
-ENV KUBECTL_VERSION=v1.15.10
-ENV HELM_VERSION=v3.1.2
+ENV KUBECTL_VERSION=v1.30.0
+ENV HELM_VERSION=v3.14.4
 
 # Install latest helm
 RUN curl -LO https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz \
