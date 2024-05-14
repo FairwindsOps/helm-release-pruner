@@ -121,26 +121,6 @@ workflows:
               only: /.*/
   "Orb Test and Publish":
     jobs:
-      - orb-tools/lint:
-          name: "Lint Orb Files"
-          pre-steps:
-            - run:
-                command: apk add git openssh
-          lint-dir: orb
-          filters:
-            branches:
-              only: /.*/
-            tags:
-              only: /.*/
-      - publish-dev-orb:
-          name: Publish Dev Orb
-          requires:
-            - "Lint Orb Files"
-          filters:
-            branches:
-              only: /.*/
-            tags:
-              ignore: /.*/
       - request-orb-publish:
           name: "Request Orb Publishing"
           filters:
