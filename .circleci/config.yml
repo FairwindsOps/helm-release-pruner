@@ -25,7 +25,7 @@ jobs:
   prep_vars:
     working_directory: /home/circleci/src/github.com/fairwindsops/helm-release-pruner
     docker:
-      - image: quay.io/reactiveops/ci-images:v12-alpine
+      - image: quay.io/reactiveops/ci-images:v14-alpine
     resource_class: large
     shell: /bin/bash
     steps:
