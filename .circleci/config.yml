@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   orb-tools: circleci/orb-tools@10.1.0
   rok8s-scripts: fairwinds/rok8s-scripts@14
+  oss-docs: fairwinds/oss-docs@0
 
 executors:
   golang-exec:
@@ -60,9 +61,14 @@ workflows:
               only: /.*/
             tags:
               only: /.*/
-      - rok8s-scripts/github_release:
-          requires:
-            - rok8s-scripts/docker_build_and_push
+      - oss-docs/publish-docs:
+          repository: pluto
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^.*/
+      - release:
           filters:
             branches:
               ignore: /.*/
