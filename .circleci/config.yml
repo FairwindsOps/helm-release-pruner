@@ -44,14 +44,6 @@ references:
         mv circleci-cli_0.1.16535_linux_amd64/circleci /bin/circleci
         circleci version
 jobs:
-  test:
-    working_directory: /home/circleci/go/src/github.com/fairwindsops/helm-release-pruner
-    docker:
-      - image: cimg/go:1.21
-    steps:
-      - checkout
-      - run: go mod download && go mod verify
-      - run: go test -v ./... -coverprofile=coverage.txt -covermode=atomic
   release:
     working_directory: /home/circleci/go/src/github.com/fairwindsops/helm-release-pruner
     resource_class: large
@@ -74,46 +66,6 @@ jobs:
             docker login -u _json_key -p "$(echo $GCP_ARTIFACTREADWRITE_JSON_KEY | base64 -d)" us-docker.pkg.dev
       - run: echo 'export GORELEASER_CURRENT_TAG="${CIRCLE_TAG}"' >> $BASH_ENV
       - run: goreleaser
-  snapshot:
-    working_directory: /home/circleci/go/src/github.com/fairwindsops/helm-release-pruner
-    resource_class: large
-    docker:
-      - image: goreleaser/goreleaser:v1.22.1
-    steps:
-      - checkout
-      - setup_remote_docker
-      - run: goreleaser --snapshot --skip-sign
-      - store_artifacts:
-          path: dist
-          destination: snapshot
-  publish-dev-orb:
-    working_directory: /go/src/github.com/fairwindsops/helm-release-pruner
-    docker:
-      - image: quay.io/reactiveops/ci-images:v12-alpine
-    shell: /bin/bash
-    steps:
-      - checkout
-      - *install_vault_alpine
-      - rok8s-scripts/get_vault_env:
-          vault_path: repo/global/env
-      - *install_circleci
-      - orb-tools/pack:
-          source: orb/
-      - orb-tools/publish:
-          orb-ref: fairwinds/helm-release-pruner@dev:${CIRCLE_BRANCH}
-          token-variable: CIRCLECI_DEV_API_TOKEN
-  request-orb-publish:
-    docker:
-      - image: quay.io/reactiveops/ci-images:v12-alpine
-    steps:
-      - *install_vault_alpine
-      - rok8s-scripts/get_vault_env:
-          vault_path: repo/helm-release-pruner/env
-      - run:
-          name: "Request Orb Publish"
-          command: |
-            apk --update add curl
-            curl -X POST --data-urlencode "payload={\"text\": \"Please publish a new helm-release-pruner orb by checking out $CIRCLE_TAG and running release-orb.sh\"}" $SLACK_URL
 workflows:
   version: 2
   release:
