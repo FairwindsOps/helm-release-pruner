@@ -46,6 +46,8 @@ workflows:
             tags:
               only: /.*/
       - rok8s-scripts/docker_build_and_push:
+          requires:
+            - "prep_vars"
           filters:
             branches:
               ignore: /.*/
