@@ -34,6 +34,13 @@ jobs:
       - *install_vault_alpine
       - rok8s-scripts/get_vault_env:
           vault_path: repo/global/env
+      - rok8s/docker_login:
+          username: $FAIRWINDS_QUAY_USER
+          password-variable: FAIRWINDS_QUAY_TOKEN
+      - rok8s/docker_build:
+          config: deploy/build.config
+      - rok8s/docker_push:
+          config: deploy/build.config
 
 workflows:
   version: 2
@@ -45,14 +52,3 @@ workflows:
               ignore: /.*/
             tags:
               only: /.*/
-      - rok8s-scripts/docker_build_and_push:
-          requires:
-            - "prep_vars"
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /.*/
-          password-variable: FAIRWINDS_QUAY_TOKEN
-          registry: quay.io
-          username: fairwinds+circleci
