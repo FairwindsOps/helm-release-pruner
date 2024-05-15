@@ -34,6 +34,9 @@ jobs:
       - *install_vault_alpine
       - rok8s-scripts/get_vault_env:
           vault_path: repo/global/env
+      - run:
+          command: |
+            echo 'export FW_QUAY_TOKEN=$FAIRWINDS_QUAY_TOKEN' >> ${BASH_ENV}
 
 workflows:
   version: 2
@@ -53,6 +56,6 @@ workflows:
               ignore: /.*/
             tags:
               only: /.*/
-          password-variable: FAIRWINDS_QUAY_TOKEN
+          password-variable: FW_QUAY_TOKEN
           registry: quay.io
           username: fairwinds+circleci
