@@ -46,7 +46,6 @@ workflows:
             tags:
               only: /.*/
       - rok8s-scripts/docker_build_and_push:
-          context: org-global
           filters:
             branches:
               ignore: /.*/
