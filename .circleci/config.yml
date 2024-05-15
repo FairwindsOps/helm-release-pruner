@@ -22,7 +22,7 @@ references:
         mv vault /usr/bin/vault
 
 jobs:
-  prep_vars:
+  prep_vars_and_release:
     working_directory: /home/circleci/src/github.com/fairwindsops/helm-release-pruner
     docker:
       - image: quay.io/reactiveops/ci-images:v14-alpine
@@ -46,7 +46,7 @@ workflows:
   version: 2
   release:
     jobs:
-      - prep_vars:
+      - prep_vars_and_release:
           filters:
             branches:
               ignore: /.*/
