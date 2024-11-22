@@ -15,6 +15,7 @@ function usage()
     echo '    --namespace-filter="^feature-.+"            <Namespace regex filter>'
     echo '    --helm-release-negate-filter="-permanent$"  <Negated Helm release regex filter>'
     echo '    --namespace-negate-filter="-permanent$"     <Negated Namespace regex filter>'
+    echo '    --preserve-namespace'
     echo '    --dry-run'
     echo ""
     echo "Example: $0 --older-than=\"2 weeks ago\" --helm-release-filter=\"^feature-.+-web$\" --namespace-filter=\"^feature-.+\""
@@ -25,6 +26,7 @@ older_than_filter=""
 release_filter=""
 namespace_filter=""
 dry_run=""
+preserve_namespace=""
 
 while [ "$1" != "" ]; do
     PARAM=`echo $1 | awk -F= '{print $1}'`
@@ -55,6 +57,9 @@ while [ "$1" != "" ]; do
         --dry-run)
             dry_run="TRUE"
             ;;
+        --preserve-namespace)
+            delete_namespace="TRUE"
+            ;;
         *)
             echo "ERROR: unknown parameter \"$PARAM\""
             usage
@@ -74,6 +79,10 @@ older_than_filter_s=$(date --date="$older_than_filter" +%s)
 
 if [ -n "$dry_run" ]; then
     echo "Dry run mode. Nothing will be deleted."
+fi
+
+if [ -n "$preserve_namespace" ]; then
+    echo "Namespace will not be deleted."
 fi
 
 counter=0
@@ -135,8 +144,8 @@ while read release_line ; do
         counter_delete=$((counter_delete+1))
         [ -z "$dry_run" ] && helm delete --namespace $release_namespace $release_name
 
-        # Delete the namespace if there are no other helm releases in it
-        if [ "$(helm list -a --namespace $release_namespace --output json | jq ". | length")" -eq 0 ]; then
+        # Delete the namespace if there are no other helm releases in it and the preserve_namespace flag is False
+        if [[ -z "$preserve_namespace" && $(helm list -a --namespace "$release_namespace" --output json | jq ". | length") -eq 0 ]]; then
             [ -z "$dry_run" ] && kubectl delete ns $release_namespace
         fi
     fi
