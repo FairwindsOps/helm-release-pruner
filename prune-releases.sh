@@ -145,7 +145,7 @@ while read release_line ; do
         [ -z "$dry_run" ] && helm delete --namespace $release_namespace $release_name
 
         # Delete the namespace if there are no other helm releases in it and the preserve_namespace flag is False
-        if [[ -z "$preserve_namespace" && $(helm list -a --namespace "$release_namespace" --output json | jq ". | length") -eq 0 ]]; then
+        if [[ -z "$preserve_namespace" && "$(helm list -a --namespace "$release_namespace" --output json | jq '. | length')" -eq 0 ]]; then
             [ -z "$dry_run" ] && kubectl delete ns $release_namespace
         fi
     fi
