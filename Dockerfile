@@ -13,7 +13,7 @@ RUN curl -LO https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz \
   && rm -rf linux-amd64 \
   && rm -f helm-${HELM_VERSION}-linux-amd64.tar.gz
 
-RUN curl -L "https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "/usr/local/bin/kubectl" \
+RUN curl -L "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "/usr/local/bin/kubectl" \
   && chmod +x "/usr/local/bin/kubectl"
 
 COPY prune-releases.sh /usr/local/bin
