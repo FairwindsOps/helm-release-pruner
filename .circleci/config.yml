@@ -156,9 +156,8 @@ workflows:
           context: org-global
           filters:
             branches:
-              only:
-                - main
-                - master
+              ignore:
+                - /pull\/[0-9]+/
 
   release:
     jobs:
