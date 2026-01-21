@@ -46,6 +46,7 @@ func newRootCmd() *cobra.Command {
 		healthAddr                 string
 		deleteRateLimit            time.Duration
 		additionalSystemNamespaces string
+		runOnce                    bool
 	)
 
 	cmd := &cobra.Command{
@@ -166,6 +167,11 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				cancel()
 			}()
 
+			// Run once mode - execute single prune cycle and exit
+			if runOnce {
+				return p.RunOnce(ctx)
+			}
+
 			// Start health server with pruner for readiness checks
 			healthServer := startHealthServer(healthAddr, p)
 
@@ -230,6 +236,8 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 		"Show what would be deleted without actually deleting")
 	flags.BoolVar(&opts.Debug, "debug", false,
 		"Enable debug logging")
+	flags.BoolVar(&runOnce, "once", false,
+		"Run a single prune cycle and exit (for cron jobs or testing)")
 
 	return cmd
 }

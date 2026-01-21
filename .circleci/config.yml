@@ -1,14 +1,35 @@
 version: 2.1
 
 orbs:
-  rok8s-scripts: fairwinds/rok8s-scripts@14
+  rok8s: fairwinds/rok8s-scripts@14
 
 executors:
   golang-exec:
     docker:
       - image: cimg/go:1.25
+  ci-images:
+    docker:
+      - image: quay.io/reactiveops/ci-images:v14.1-bullseye
+  ci-images-large:
+    resource_class: large
+    docker:
+      - image: quay.io/reactiveops/ci-images:v14.1-bullseye
 
 references:
+  e2e_configuration: &e2e_configuration
+    pre_script: e2e/pre-e2e.sh
+    script: e2e/run-e2e.sh
+    command_runner_image: quay.io/reactiveops/ci-images:v14.1-bullseye
+    requires:
+      - test
+      - lint
+      - build_docker
+    filters:
+      branches:
+        only: /.*/
+      tags:
+        ignore: /.*/
+
   install_vault_alpine: &install_vault_alpine
     run:
       name: install hashicorp vault
@@ -67,15 +88,15 @@ jobs:
       - checkout
       - setup_remote_docker
       - *install_vault_alpine
-      - rok8s-scripts/get_vault_env:
+      - rok8s/get_vault_env:
           vault_path: repo/global/env
-      - rok8s-scripts/set_env
-      - rok8s-scripts/docker_login:
+      - rok8s/set_env
+      - rok8s/docker_login:
           username: $FAIRWINDS_QUAY_USER
           password-variable: FAIRWINDS_QUAY_TOKEN
-      - rok8s-scripts/docker_build:
+      - rok8s/docker_build:
           config: deploy/build.config
-      - rok8s-scripts/docker_push:
+      - rok8s/docker_push:
           config: deploy/build.config
 
 workflows:
@@ -88,6 +109,18 @@ workflows:
           requires:
             - test
             - lint
+      - rok8s/kubernetes_e2e_tests:
+          name: "e2e-kubernetes-1.32"
+          kind_node_image: "kindest/node:v1.32.0"
+          executor:
+            name: ci-images-large
+          <<: *e2e_configuration
+      - rok8s/kubernetes_e2e_tests:
+          name: "e2e-kubernetes-1.33"
+          kind_node_image: "kindest/node:v1.33.0"
+          executor:
+            name: ci-images-large
+          <<: *e2e_configuration
 
   release:
     jobs:

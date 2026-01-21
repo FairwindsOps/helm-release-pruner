@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/kube"
 	releasev1 "helm.sh/helm/v4/pkg/release/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -624,6 +625,8 @@ func (p *Pruner) deleteRelease(ctx context.Context, name, namespace string) erro
 	}
 
 	uninstall := action.NewUninstall(actionConfig)
+	uninstall.WaitStrategy = kube.LegacyStrategy
+	uninstall.Timeout = 5 * time.Minute
 	_, err := uninstall.Run(name)
 	return err
 }
