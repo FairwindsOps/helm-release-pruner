@@ -385,6 +385,28 @@ const maxBackoff = 5 * time.Minute
 // maxBackoffShift is the maximum bit shift to prevent overflow (2^10 seconds = ~17 minutes)
 const maxBackoffShift = 10
 
+// CalculateBackoff computes the exponential backoff duration for a given number
+// of consecutive failures. Returns 0 for the first failure (no backoff needed).
+// Uses exponential backoff: 2^(failures-1) seconds, capped at maxBackoff.
+func CalculateBackoff(consecutiveFailures int) time.Duration {
+	if consecutiveFailures <= 1 {
+		return 0
+	}
+
+	// Cap the shift to prevent overflow
+	shift := consecutiveFailures - 1
+	if shift > maxBackoffShift {
+		shift = maxBackoffShift
+	}
+
+	backoff := time.Duration(1<<uint(shift)) * time.Second
+	if backoff > maxBackoff {
+		backoff = maxBackoff
+	}
+
+	return backoff
+}
+
 // RunDaemon runs the pruner as a daemon, executing prune cycles at the configured interval.
 func (p *Pruner) RunDaemon(ctx context.Context) error {
 	p.logger.Info("starting daemon",
@@ -434,16 +456,7 @@ func (p *Pruner) runCycleWithBackoff(ctx context.Context) {
 			"consecutive_failures", failures)
 
 		// Apply exponential backoff if we have repeated failures
-		if failures > 1 {
-			// Cap the shift to prevent overflow
-			shift := failures - 1
-			if shift > maxBackoffShift {
-				shift = maxBackoffShift
-			}
-			backoff := time.Duration(1<<uint(shift)) * time.Second
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
+		if backoff := CalculateBackoff(failures); backoff > 0 {
 			p.logger.Warn("applying backoff due to repeated failures",
 				"backoff", backoff)
 

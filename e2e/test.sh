@@ -100,10 +100,10 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets", "configmaps"]
-    verbs: ["list", "get", "delete", "watch"]
+    verbs: ["list", "get", "delete"]
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["list", "get", "delete", "watch"]
+    verbs: ["list", "get", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

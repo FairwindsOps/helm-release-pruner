@@ -78,6 +78,27 @@ jobs:
           name: Build Docker Image
           command: docker build -t helm-release-pruner:test .
 
+  push_docker:
+    working_directory: /home/circleci/src/github.com/fairwindsops/helm-release-pruner
+    docker:
+      - image: quay.io/reactiveops/ci-images:v14-alpine
+    resource_class: large
+    shell: /bin/bash
+    steps:
+      - checkout
+      - setup_remote_docker
+      - *install_vault_alpine
+      - rok8s/get_vault_env:
+          vault_path: repo/global/env
+      - rok8s/set_env
+      - rok8s/docker_login:
+          username: $FAIRWINDS_QUAY_USER
+          password-variable: FAIRWINDS_QUAY_TOKEN
+      - rok8s/docker_build:
+          config: .circleci/build.config
+      - rok8s/docker_push:
+          config: .circleci/build.config
+
   prep_vars_and_release:
     working_directory: /home/circleci/src/github.com/fairwindsops/helm-release-pruner
     docker:
@@ -95,9 +116,9 @@ jobs:
           username: $FAIRWINDS_QUAY_USER
           password-variable: FAIRWINDS_QUAY_TOKEN
       - rok8s/docker_build:
-          config: deploy/build.config
+          config: .circleci/build.config
       - rok8s/docker_push:
-          config: deploy/build.config
+          config: .circleci/build.config
 
 workflows:
   version: 2
@@ -127,6 +148,17 @@ workflows:
           executor:
             name: ci-images-large
           <<: *e2e_configuration
+      - push_docker:
+          requires:
+            - e2e-kubernetes-1.33
+            - e2e-kubernetes-1.34
+            - e2e-kubernetes-1.35
+          context: org-global
+          filters:
+            branches:
+              only:
+                - main
+                - master
 
   release:
     jobs:

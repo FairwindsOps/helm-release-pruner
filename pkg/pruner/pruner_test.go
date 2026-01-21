@@ -395,6 +395,97 @@ func TestInitializedAndReady(t *testing.T) {
 	}
 }
 
+func TestCalculateBackoff(t *testing.T) {
+	tests := []struct {
+		name                string
+		consecutiveFailures int
+		expected            time.Duration
+	}{
+		{
+			name:                "zero failures - no backoff",
+			consecutiveFailures: 0,
+			expected:            0,
+		},
+		{
+			name:                "first failure - no backoff",
+			consecutiveFailures: 1,
+			expected:            0,
+		},
+		{
+			name:                "second failure - 2^1 = 2 seconds",
+			consecutiveFailures: 2,
+			expected:            2 * time.Second,
+		},
+		{
+			name:                "third failure - 2^2 = 4 seconds",
+			consecutiveFailures: 3,
+			expected:            4 * time.Second,
+		},
+		{
+			name:                "fourth failure - 2^3 = 8 seconds",
+			consecutiveFailures: 4,
+			expected:            8 * time.Second,
+		},
+		{
+			name:                "fifth failure - 2^4 = 16 seconds",
+			consecutiveFailures: 5,
+			expected:            16 * time.Second,
+		},
+		{
+			name:                "tenth failure - 2^9 = 512 seconds, but capped at 5 minutes",
+			consecutiveFailures: 10,
+			expected:            5 * time.Minute,
+		},
+		{
+			name:                "very high failures - capped at maxBackoff (5 minutes)",
+			consecutiveFailures: 100,
+			expected:            5 * time.Minute,
+		},
+		{
+			name:                "negative failures - treated as no backoff",
+			consecutiveFailures: -1,
+			expected:            0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CalculateBackoff(tt.consecutiveFailures)
+			if got != tt.expected {
+				t.Errorf("CalculateBackoff(%d) = %v, want %v", tt.consecutiveFailures, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCalculateBackoff_ExponentialGrowth(t *testing.T) {
+	// Verify that backoff grows exponentially until it hits the cap
+	var prevBackoff time.Duration
+	for failures := 2; failures <= 8; failures++ {
+		backoff := CalculateBackoff(failures)
+
+		// Each step should double (until we hit the cap)
+		if prevBackoff > 0 && backoff < 5*time.Minute {
+			expectedBackoff := prevBackoff * 2
+			if backoff != expectedBackoff {
+				t.Errorf("CalculateBackoff(%d) = %v, expected %v (2x previous)", failures, backoff, expectedBackoff)
+			}
+		}
+
+		prevBackoff = backoff
+	}
+}
+
+func TestCalculateBackoff_NeverExceedsMax(t *testing.T) {
+	// Test a range of values to ensure we never exceed maxBackoff
+	for failures := 0; failures <= 1000; failures++ {
+		backoff := CalculateBackoff(failures)
+		if backoff > 5*time.Minute {
+			t.Errorf("CalculateBackoff(%d) = %v, exceeds maxBackoff of 5 minutes", failures, backoff)
+		}
+	}
+}
+
 func TestHasReleasePruningFilters(t *testing.T) {
 	tests := []struct {
 		name     string
