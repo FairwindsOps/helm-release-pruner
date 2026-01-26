@@ -58,7 +58,7 @@ while [ "$1" != "" ]; do
             dry_run="TRUE"
             ;;
         --preserve-namespace)
-            delete_namespace="TRUE"
+            preserve_namespace="TRUE"
             ;;
         *)
             echo "ERROR: unknown parameter \"$PARAM\""
