@@ -28,12 +28,12 @@ for arg in "$@"; do
 done
 
 cleanup() {
-    if [[ "$KEEP_CLUSTER" == "false" ]]; then
-        log_info "Cleaning up kind cluster '$CLUSTER_NAME'..."
-        kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
-    else
+    if [[ "$KEEP_CLUSTER" == "true" ]]; then
         log_warn "Keeping cluster '$CLUSTER_NAME' for debugging"
         log_warn "Delete it later with: kind delete cluster --name $CLUSTER_NAME"
+    else
+        log_info "Cleaning up kind cluster '$CLUSTER_NAME'..."
+        kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
     fi
 }
 
@@ -73,6 +73,14 @@ kind load docker-image "$IMAGE_NAME" --name "$CLUSTER_NAME"
 log_info "Step 4: Running e2e tests..."
 echo ""
 "$SCRIPT_DIR/test.sh"
+
+if [[ "$KEEP_CLUSTER" == "true" ]]; then
+    log_info "Deleting test namespaces..."
+    while read -r ns; do
+        [[ -z "$ns" ]] && continue
+        kubectl delete namespace "$ns" --ignore-not-found=true --wait --timeout=60s 2>/dev/null || true
+    done < <(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | grep '^test-' || true)
+fi
 
 echo ""
 log_info "=============================================="
