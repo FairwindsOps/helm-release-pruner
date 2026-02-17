@@ -14,7 +14,7 @@ A Go-based daemon for automatically deleting old Helm releases. Runs continuousl
 - **Graceful shutdown** — Handles SIGTERM/SIGINT for clean pod termination
 - **Rate limiting** — Configurable rate limiting to avoid overwhelming the API server
 - **Dry-run mode** — Preview what would be deleted before making changes
-- **Run-once mode** — Single execution for CI/CD pipelines or CronJobs
+- **Run-once mode** — Single execution for CI/CD pipelines or CronJobs (`--once`)
 - **Minimal image** — Alpine-based container with non-root user
 
 ## Installation
@@ -57,7 +57,7 @@ The pruner runs as a daemon by default, executing prune cycles at the configured
 | `--system-namespaces` | | Comma-separated additional namespaces to never delete |
 | `--delete-rate-limit` | `100ms` | Minimum duration between delete operations (0 to disable) |
 | `--dry-run` | `false` | Show what would be deleted |
-| `--run-once` | `false` | Run a single prune cycle and exit (for CronJobs) |
+| `--once` | `false` | Run a single prune cycle and exit (for CronJobs) |
 | `--debug` | `false` | Enable debug logging |
 | `--health-addr` | `:8080` | Address for health check and metrics endpoints |
 
@@ -245,6 +245,7 @@ The Go version maintains CLI compatibility where possible:
 | `--older-than="4 weeks ago"` | `--older-than=4w` | Uses Go duration format |
 | `--preserve-namespace` | `--preserve-namespace` | **Bug fix:** Now works correctly (was broken in bash) |
 | `--max-releases-to-keep` | `--max-releases-to-keep` | Same global behavior |
+| one-shot / cron | `--once` | Run a single cycle and exit (for CronJobs) |
 | N/A | `--debug` | New flag for verbose logging |
 
 **Key changes:**
@@ -272,7 +273,7 @@ This is the same behavior as the original bash script. If you need to keep N rel
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.25+ (see go.mod)
 - Access to a Kubernetes cluster (for testing)
 
 ### Building

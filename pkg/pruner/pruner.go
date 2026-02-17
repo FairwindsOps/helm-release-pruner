@@ -63,14 +63,10 @@ type Pruner struct {
 	logger           *slog.Logger
 	systemNamespaces map[string]bool
 
-	// ready indicates whether the pruner has successfully completed at least one cycle.
-	ready atomic.Bool
-	// initialized indicates whether the pruner has attempted at least one cycle.
-	initialized atomic.Bool
-	// consecutiveFailures tracks repeated failures for backoff.
+	ready         atomic.Bool
+	initialized   atomic.Bool
 	consecutiveFailures int
-	// mu protects consecutiveFailures
-	mu sync.Mutex
+	mu            sync.Mutex
 }
 
 // New creates a new Pruner instance.
@@ -111,38 +107,34 @@ func New(opts Options) (*Pruner, error) {
 	}, nil
 }
 
-// Ready returns true if the pruner has successfully completed at least one cycle.
+// Ready returns true after at least one successful prune cycle.
 func (p *Pruner) Ready() bool {
 	return p.ready.Load()
 }
 
-// Initialized returns true if the pruner has attempted at least one cycle.
-// This is useful for readiness probes that want to pass after initialization
-// even if the first cycle failed.
+// Initialized returns true after the first cycle attempt (success or failure).
 func (p *Pruner) Initialized() bool {
 	return p.initialized.Load()
 }
 
-// CheckConnectivity verifies that we can connect to the Kubernetes cluster.
+// CheckConnectivity verifies cluster reachability (for readiness probes).
 func (p *Pruner) CheckConnectivity(ctx context.Context) error {
 	_, err := p.k8s.CoreV1().Namespaces().List(ctx, metav1.ListOptions{Limit: 1})
 	return err
 }
 
-// RunOnce executes a single pruning cycle.
+// RunOnce runs a single prune cycle (releases and optionally orphan namespaces).
 func (p *Pruner) RunOnce(ctx context.Context) error {
 	if p.opts.DryRun {
 		p.logger.Info("running in dry-run mode - nothing will be deleted")
 	}
 
-	// Phase 1: Prune old Helm releases (if filters are configured)
 	if p.hasReleasePruningFilters() {
 		if err := p.pruneReleases(ctx); err != nil {
 			return fmt.Errorf("release pruning failed: %w", err)
 		}
 	}
 
-	// Phase 2: Clean up orphaned namespaces (if enabled)
 	if p.opts.CleanupOrphanNamespaces {
 		if err := p.cleanupOrphanNamespaces(ctx); err != nil {
 			return fmt.Errorf("orphan namespace cleanup failed: %w", err)
@@ -152,7 +144,6 @@ func (p *Pruner) RunOnce(ctx context.Context) error {
 	return nil
 }
 
-// hasReleasePruningFilters returns true if any release pruning filters are configured.
 func (p *Pruner) hasReleasePruningFilters() bool {
 	return p.opts.OlderThan > 0 ||
 		p.opts.MaxReleasesToKeep > 0 ||
@@ -162,9 +153,7 @@ func (p *Pruner) hasReleasePruningFilters() bool {
 		p.opts.NamespaceExclude != nil
 }
 
-// pruneReleases handles the release pruning logic.
 func (p *Pruner) pruneReleases(ctx context.Context) error {
-	// List all releases across all namespaces
 	releases, err := p.listAllReleases(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list releases: %w", err)
@@ -173,11 +162,8 @@ func (p *Pruner) pruneReleases(ctx context.Context) error {
 	p.logger.Info("found releases", "count", len(releases))
 	releasesScannedTotal.Add(float64(len(releases)))
 
-	// Filter releases based on options
 	candidates := p.filterReleases(releases)
 	p.logger.Debug("releases after filtering", "count", len(candidates))
-
-	// Apply age and count filters to determine which releases to delete
 	toDelete := p.selectReleasesToDelete(candidates)
 
 	if len(toDelete) == 0 {
@@ -186,13 +172,9 @@ func (p *Pruner) pruneReleases(ctx context.Context) error {
 	}
 
 	p.logger.Info("releases to delete", "count", len(toDelete))
-
-	// Track namespaces that might become empty
 	affectedNamespaces := make(map[string]bool)
 
-	// Delete releases with rate limiting
 	for i, rel := range toDelete {
-		// Check for context cancellation
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -219,7 +201,6 @@ func (p *Pruner) pruneReleases(ctx context.Context) error {
 			}
 			releasesDeletedTotal.Inc()
 
-			// Apply rate limiting between deletions (not after the last one)
 			if p.opts.DeleteRateLimit > 0 && i < len(toDelete)-1 {
 				select {
 				case <-ctx.Done():
@@ -230,7 +211,6 @@ func (p *Pruner) pruneReleases(ctx context.Context) error {
 		}
 	}
 
-	// Clean up empty namespaces if not preserving them
 	if !p.opts.PreserveNamespace {
 		for ns := range affectedNamespaces {
 			if ctx.Err() != nil {
@@ -247,11 +227,8 @@ func (p *Pruner) pruneReleases(ctx context.Context) error {
 	return nil
 }
 
-// cleanupOrphanNamespaces finds and deletes namespaces that have no Helm releases.
 func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 	p.logger.Info("starting orphan namespace cleanup")
-
-	// List all namespaces
 	namespaces, err := p.k8s.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list namespaces: %w", err)
@@ -259,24 +236,20 @@ func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 
 	p.logger.Debug("found namespaces", "count", len(namespaces.Items))
 
-	// First pass: identify orphan namespaces to delete
 	var orphanNamespaces []string
 	for _, ns := range namespaces.Items {
-		// Check for context cancellation
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
 		nsName := ns.Name
 
-		// Never delete system namespaces regardless of filters
 		if p.systemNamespaces[nsName] {
 			p.logger.Debug("skipping system namespace",
 				"namespace", nsName)
 			continue
 		}
 
-		// Check if namespace matches the inclusion filter
 		if p.opts.OrphanNamespaceFilter != nil {
 			if !p.opts.OrphanNamespaceFilter.MatchString(nsName) {
 				p.logger.Debug("skipping namespace (doesn't match orphan filter)",
@@ -285,7 +258,6 @@ func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 			}
 		}
 
-		// Check if namespace matches the exclusion filter
 		if p.opts.OrphanNamespaceExclude != nil {
 			if p.opts.OrphanNamespaceExclude.MatchString(nsName) {
 				p.logger.Debug("skipping namespace (matches orphan exclude)",
@@ -294,7 +266,6 @@ func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 			}
 		}
 
-		// Check if namespace has any Helm releases
 		hasReleases, err := p.namespaceHasReleases(ctx, nsName)
 		if err != nil {
 			p.logger.Error("failed to check releases in namespace",
@@ -309,7 +280,6 @@ func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 			continue
 		}
 
-		// Namespace is orphaned (no Helm releases)
 		orphanNamespaces = append(orphanNamespaces, nsName)
 	}
 
@@ -320,9 +290,7 @@ func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 
 	p.logger.Info("orphan namespaces to delete", "count", len(orphanNamespaces))
 
-	// Second pass: delete orphan namespaces with rate limiting
 	for i, nsName := range orphanNamespaces {
-		// Check for context cancellation
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -342,7 +310,6 @@ func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 			}
 			namespacesDeletedTotal.Inc()
 
-			// Apply rate limiting between deletions (not after the last one)
 			if p.opts.DeleteRateLimit > 0 && i < len(orphanNamespaces)-1 {
 				select {
 				case <-ctx.Done():
@@ -357,9 +324,7 @@ func (p *Pruner) cleanupOrphanNamespaces(ctx context.Context) error {
 	return nil
 }
 
-// namespaceHasReleases checks if a namespace contains any Helm releases.
 func (p *Pruner) namespaceHasReleases(ctx context.Context, namespace string) (bool, error) {
-	// Check for context cancellation before making API calls
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}
@@ -370,7 +335,7 @@ func (p *Pruner) namespaceHasReleases(ctx context.Context, namespace string) (bo
 	}
 
 	listAction := action.NewList(actionConfig)
-	listAction.All = true // Include all statuses
+	listAction.All = true
 	releases, err := listAction.Run()
 	if err != nil {
 		return false, err
@@ -381,13 +346,9 @@ func (p *Pruner) namespaceHasReleases(ctx context.Context, namespace string) (bo
 
 // maxBackoff is the maximum backoff duration between failed cycles.
 const maxBackoff = 5 * time.Minute
-
-// maxBackoffShift is the maximum bit shift to prevent overflow (2^10 seconds = ~17 minutes)
 const maxBackoffShift = 10
 
-// CalculateBackoff computes the exponential backoff duration for a given number
-// of consecutive failures. Returns 0 for the first failure (no backoff needed).
-// Uses exponential backoff: 2^(failures-1) seconds, capped at maxBackoff.
+// CalculateBackoff returns exponential backoff duration (2^(n-1) s, capped at maxBackoff).
 func CalculateBackoff(consecutiveFailures int) time.Duration {
 	if consecutiveFailures <= 1 {
 		return 0
@@ -407,14 +368,13 @@ func CalculateBackoff(consecutiveFailures int) time.Duration {
 	return backoff
 }
 
-// RunDaemon runs the pruner as a daemon, executing prune cycles at the configured interval.
+// RunDaemon runs prune cycles at the configured interval until context is cancelled.
 func (p *Pruner) RunDaemon(ctx context.Context) error {
-	p.logger.Info("starting daemon",
+		p.logger.Info("starting daemon",
 		"interval", p.opts.Interval,
 		"dry_run", p.opts.DryRun,
 		"cleanup_orphan_namespaces", p.opts.CleanupOrphanNamespaces)
 
-	// Run immediately on startup
 	p.runCycleWithBackoff(ctx)
 
 	ticker := time.NewTicker(p.opts.Interval)
@@ -431,11 +391,8 @@ func (p *Pruner) RunDaemon(ctx context.Context) error {
 	}
 }
 
-// runCycleWithBackoff executes a prune cycle with exponential backoff on repeated failures.
 func (p *Pruner) runCycleWithBackoff(ctx context.Context) {
 	p.logger.Info("starting prune cycle")
-
-	// Mark as initialized after first attempt
 	defer p.initialized.Store(true)
 
 	start := time.Now()
@@ -455,7 +412,6 @@ func (p *Pruner) runCycleWithBackoff(ctx context.Context) {
 			"duration", duration,
 			"consecutive_failures", failures)
 
-		// Apply exponential backoff if we have repeated failures
 		if backoff := CalculateBackoff(failures); backoff > 0 {
 			p.logger.Warn("applying backoff due to repeated failures",
 				"backoff", backoff)
@@ -469,7 +425,6 @@ func (p *Pruner) runCycleWithBackoff(ctx context.Context) {
 		return
 	}
 
-	// Success - reset failure count and mark as ready
 	p.mu.Lock()
 	p.consecutiveFailures = 0
 	p.mu.Unlock()
@@ -480,30 +435,25 @@ func (p *Pruner) runCycleWithBackoff(ctx context.Context) {
 		"next_run", time.Now().Add(p.opts.Interval))
 }
 
-// listAllReleases returns all Helm releases across all namespaces.
 func (p *Pruner) listAllReleases(ctx context.Context) ([]*releasev1.Release, error) {
-	// Check for context cancellation before making API calls
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
 	actionConfig := new(action.Configuration)
-
-	// Initialize for all namespaces (empty string = all namespaces)
 	if err := actionConfig.Init(p.settings.RESTClientGetter(), "", os.Getenv("HELM_DRIVER")); err != nil {
 		return nil, err
 	}
 
 	listAction := action.NewList(actionConfig)
 	listAction.AllNamespaces = true
-	listAction.All = true // Include all statuses (deployed, failed, etc.)
+	listAction.All = true
 
 	releaseList, err := listAction.Run()
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert Releaser interface to concrete Release type
 	releases := make([]*releasev1.Release, 0, len(releaseList))
 	for _, r := range releaseList {
 		if rel, ok := r.(*releasev1.Release); ok {
@@ -514,12 +464,10 @@ func (p *Pruner) listAllReleases(ctx context.Context) ([]*releasev1.Release, err
 	return releases, nil
 }
 
-// filterReleases applies regex filters to the release list.
 func (p *Pruner) filterReleases(releases []*releasev1.Release) []*releasev1.Release {
 	var filtered []*releasev1.Release
 
 	for _, rel := range releases {
-		// Check namespace inclusion filter
 		if p.opts.NamespaceFilter != nil {
 			if !p.opts.NamespaceFilter.MatchString(rel.Namespace) {
 				p.logger.Debug("skipping release (namespace filter)",
@@ -529,7 +477,6 @@ func (p *Pruner) filterReleases(releases []*releasev1.Release) []*releasev1.Rele
 			}
 		}
 
-		// Check namespace exclusion filter
 		if p.opts.NamespaceExclude != nil {
 			if p.opts.NamespaceExclude.MatchString(rel.Namespace) {
 				p.logger.Debug("skipping release (namespace exclude)",
@@ -539,7 +486,6 @@ func (p *Pruner) filterReleases(releases []*releasev1.Release) []*releasev1.Rele
 			}
 		}
 
-		// Check release name inclusion filter
 		if p.opts.ReleaseFilter != nil {
 			if !p.opts.ReleaseFilter.MatchString(rel.Name) {
 				p.logger.Debug("skipping release (release filter)",
@@ -549,7 +495,6 @@ func (p *Pruner) filterReleases(releases []*releasev1.Release) []*releasev1.Rele
 			}
 		}
 
-		// Check release name exclusion filter
 		if p.opts.ReleaseExclude != nil {
 			if p.opts.ReleaseExclude.MatchString(rel.Name) {
 				p.logger.Debug("skipping release (release exclude)",
@@ -565,26 +510,20 @@ func (p *Pruner) filterReleases(releases []*releasev1.Release) []*releasev1.Rele
 	return filtered
 }
 
-// selectReleasesToDelete applies age and count filters to determine which releases to delete.
-// The --max-releases-to-keep limit is applied GLOBALLY across all filtered releases,
-// keeping the N most recently deployed releases and marking the rest for deletion.
 func (p *Pruner) selectReleasesToDelete(releases []*releasev1.Release) []*releasev1.Release {
 	if len(releases) == 0 {
 		return nil
 	}
 
-	// Sort by last deployed time (newest first) for count-based filtering
 	sorted := make([]*releasev1.Release, len(releases))
 	copy(sorted, releases)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Info.LastDeployed.After(sorted[j].Info.LastDeployed)
 	})
 
-	// Track releases to delete using a map to avoid duplicates
 	toDeleteMap := make(map[*releasev1.Release]bool)
 	now := time.Now()
 
-	// Apply count-based filtering (keep N newest globally)
 	if p.opts.MaxReleasesToKeep > 0 && len(sorted) > p.opts.MaxReleasesToKeep {
 		for i := p.opts.MaxReleasesToKeep; i < len(sorted); i++ {
 			rel := sorted[i]
@@ -597,7 +536,6 @@ func (p *Pruner) selectReleasesToDelete(releases []*releasev1.Release) []*releas
 		}
 	}
 
-	// Apply age-based filtering
 	if p.opts.OlderThan > 0 {
 		for _, rel := range releases {
 			if toDeleteMap[rel] {
@@ -615,7 +553,6 @@ func (p *Pruner) selectReleasesToDelete(releases []*releasev1.Release) []*releas
 		}
 	}
 
-	// Convert map to slice
 	toDelete := make([]*releasev1.Release, 0, len(toDeleteMap))
 	for rel := range toDeleteMap {
 		toDelete = append(toDelete, rel)
@@ -624,9 +561,7 @@ func (p *Pruner) selectReleasesToDelete(releases []*releasev1.Release) []*releas
 	return toDelete
 }
 
-// deleteRelease uninstalls a Helm release.
 func (p *Pruner) deleteRelease(ctx context.Context, name, namespace string) error {
-	// Check for context cancellation before making API calls
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -644,9 +579,7 @@ func (p *Pruner) deleteRelease(ctx context.Context, name, namespace string) erro
 	return err
 }
 
-// deleteNamespaceIfEmpty deletes a namespace if it has no Helm releases remaining.
 func (p *Pruner) deleteNamespaceIfEmpty(ctx context.Context, namespace string) error {
-	// Never delete system namespaces
 	if p.systemNamespaces[namespace] {
 		p.logger.Debug("not deleting system namespace",
 			"namespace", namespace)
@@ -664,7 +597,6 @@ func (p *Pruner) deleteNamespaceIfEmpty(ctx context.Context, namespace string) e
 		return nil
 	}
 
-	// Namespace is empty of Helm releases, delete it
 	if p.opts.DryRun {
 		p.logger.Info("would delete empty namespace", "namespace", namespace)
 		return nil
@@ -678,12 +610,9 @@ func (p *Pruner) deleteNamespaceIfEmpty(ctx context.Context, namespace string) e
 	return nil
 }
 
-// newKubernetesClient creates a Kubernetes clientset.
 func newKubernetesClient() (kubernetes.Interface, error) {
-	// Try in-cluster config first
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		// Fall back to kubeconfig
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 		configOverrides := &clientcmd.ConfigOverrides{}
 		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)

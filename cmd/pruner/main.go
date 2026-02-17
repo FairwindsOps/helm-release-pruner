@@ -57,13 +57,9 @@ count limits, and regex filters. Can also clean up orphaned namespaces that
 have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			// Set interval
 			opts.Interval = interval
-
-			// Set rate limit
 			opts.DeleteRateLimit = deleteRateLimit
 
-			// Parse additional system namespaces
 			if additionalSystemNamespaces != "" {
 				opts.AdditionalSystemNamespaces = strings.Split(additionalSystemNamespaces, ",")
 				for i, ns := range opts.AdditionalSystemNamespaces {
@@ -71,7 +67,6 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				}
 			}
 
-			// Parse duration string for older-than
 			if olderThan != "" {
 				d, err := parseDuration(olderThan)
 				if err != nil {
@@ -80,7 +75,6 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				opts.OlderThan = d
 			}
 
-			// Compile regex filters for release pruning
 			if releaseFilter != "" {
 				re, err := regexp.Compile(releaseFilter)
 				if err != nil {
@@ -113,7 +107,6 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				opts.NamespaceExclude = re
 			}
 
-			// Compile regex filters for orphan namespace cleanup
 			if orphanNamespaceFilter != "" {
 				re, err := regexp.Compile(orphanNamespaceFilter)
 				if err != nil {
@@ -130,13 +123,11 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				opts.OrphanNamespaceExclude = re
 			}
 
-			// Validate orphan namespace cleanup - filter is REQUIRED for safety
 			if opts.CleanupOrphanNamespaces && opts.OrphanNamespaceFilter == nil {
 				fmt.Fprintln(os.Stderr, "WARNING: --cleanup-orphan-namespaces requires --orphan-namespace-filter for safety; orphan cleanup disabled")
 				opts.CleanupOrphanNamespaces = false
 			}
 
-			// Validate configuration
 			hasReleasePruning := opts.OlderThan > 0 || opts.MaxReleasesToKeep > 0 ||
 				opts.ReleaseFilter != nil || opts.NamespaceFilter != nil ||
 				opts.ReleaseExclude != nil || opts.NamespaceExclude != nil
@@ -153,11 +144,9 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				return fmt.Errorf("failed to initialize pruner: %w", err)
 			}
 
-			// Set up context with signal handling for graceful shutdown
 			ctx, cancel := context.WithCancel(cmd.Context())
 			defer cancel()
 
-			// Handle shutdown signals
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
@@ -167,18 +156,13 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				cancel()
 			}()
 
-			// Run once mode - execute single prune cycle and exit
 			if runOnce {
 				return p.RunOnce(ctx)
 			}
 
-			// Start health server with pruner for readiness checks
 			healthServer := startHealthServer(healthAddr, p)
-
-			// Run the daemon
 			err = p.RunDaemon(ctx)
 
-			// Shutdown health server
 			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer shutdownCancel()
 			if shutdownErr := healthServer.Shutdown(shutdownCtx); shutdownErr != nil {
@@ -242,13 +226,11 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 	return cmd
 }
 
-// startHealthServer starts an HTTP server for health checks and metrics.
-// The pruner is used to check actual readiness (connectivity verified).
+// startHealthServer starts an HTTP server for /healthz, /readyz, and /metrics.
 func startHealthServer(addr string, p *pruner.Pruner) *http.Server {
 	mux := http.NewServeMux()
 
-	// Liveness probe - always returns OK if the process is running
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte("ok")); err != nil {
 			// Log but don't fail - client may have disconnected
@@ -256,31 +238,25 @@ func startHealthServer(addr string, p *pruner.Pruner) *http.Server {
 		}
 	})
 
-	// Readiness probe - returns OK after initialization and if we can connect
-	// Uses a more lenient check: ready after first attempt (even if failed)
-	// but verifies current connectivity
-	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		// Check if we've attempted at least one cycle
-		if !p.Initialized() {
+		mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+			if !p.Initialized() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			if _, err := w.Write([]byte("not ready: initializing")); err != nil {
 				fmt.Fprintf(os.Stderr, "health endpoint write error: %v\n", err)
 			}
 			return
-		}
+			}
 
-		// Verify we can still connect to the cluster
-		if err := p.CheckConnectivity(r.Context()); err != nil {
+			if err := p.CheckConnectivity(r.Context()); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			if _, err := w.Write([]byte("not ready: " + err.Error())); err != nil {
 				fmt.Fprintf(os.Stderr, "health endpoint write error: %v\n", err)
 			}
 			return
-		}
+			}
 
-		w.WriteHeader(http.StatusOK)
-		// Include whether we've had a successful cycle in the response
-		status := "ok"
+			w.WriteHeader(http.StatusOK)
+			status := "ok"
 		if !p.Ready() {
 			status = "ok (no successful cycle yet)"
 		}
@@ -289,7 +265,6 @@ func startHealthServer(addr string, p *pruner.Pruner) *http.Server {
 		}
 	})
 
-	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{

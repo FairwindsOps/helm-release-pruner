@@ -15,7 +15,7 @@ lint:
 reportcard:
 	goreportcard-cli -t 100 -v
 test:
-	$(GOCMD) test -v --bench --benchmem -coverprofile coverage.txt -covermode=atomic ./...
+	$(GOCMD) test -v -bench=. -benchmem -coverprofile coverage.txt -covermode=atomic ./...
 	$(GOCMD) vet ./... 2> govet-report.out
 	$(GOCMD) tool cover -html=coverage.txt -o cover-report.html
 	printf "\nCoverage report available at cover-report.html\n\n"
