@@ -354,13 +354,16 @@ func CalculateBackoff(consecutiveFailures int) time.Duration {
 		return 0
 	}
 
-	// Cap the shift to prevent overflow
 	shift := consecutiveFailures - 1
 	if shift > maxBackoffShift {
 		shift = maxBackoffShift
 	}
 
-	backoff := time.Duration(1<<uint(shift)) * time.Second
+	seconds := 1
+	for i := 0; i < shift; i++ {
+		seconds *= 2
+	}
+	backoff := time.Duration(seconds) * time.Second
 	if backoff > maxBackoff {
 		backoff = maxBackoff
 	}
