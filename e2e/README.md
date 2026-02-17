@@ -24,7 +24,7 @@ Tests run automatically in CircleCI on every PR using the `rok8s/kubernetes_e2e_
 2. **run-e2e.sh** - Runs the test suite inside the cluster
 3. **test.sh** - The actual test cases with assertions
 
-Tests run against multiple Kubernetes versions (1.32, 1.33).
+Tests run against multiple Kubernetes versions (1.33, 1.34, 1.35).
 
 ## Running Locally
 
