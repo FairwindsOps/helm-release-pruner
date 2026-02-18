@@ -131,7 +131,6 @@ jobs:
       - run: echo 'export GORELEASER_CURRENT_TAG="${CIRCLE_TAG}"' >> $BASH_ENV
       - run: goreleaser release --clean
 
-  # Same pattern as pluto and insights-cli: validate release pipeline (binaries + Docker) without pushing
   snapshot:
     working_directory: /home/circleci/project
     resource_class: large
