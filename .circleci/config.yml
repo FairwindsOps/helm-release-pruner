@@ -103,40 +103,26 @@ jobs:
       - rok8s/docker_push:
           config: .circleci/build.config
 
-  prep_vars_and_release:
-    working_directory: /home/circleci/src/github.com/fairwindsops/helm-release-pruner
-    docker:
-      - image: quay.io/reactiveops/ci-images:v14-alpine
+  release:
+    working_directory: /home/circleci/project
     resource_class: large
     shell: /bin/bash
+    docker:
+      - image: goreleaser/goreleaser:v2.13.1
     steps:
       - checkout
-      - setup_remote_docker
       - *install_vault_alpine
       - rok8s/get_vault_env:
           vault_path: repo/global/env
       - rok8s/set_env
+      - setup_remote_docker:
+          version: docker27
       - rok8s/docker_login:
+          registry: "quay.io"
           username: $FAIRWINDS_QUAY_USER
           password-variable: FAIRWINDS_QUAY_TOKEN
-      - rok8s/docker_build:
-          config: .circleci/build.config
-      - rok8s/docker_push:
-          config: .circleci/build.config
-
-  # Publishes binaries and changelog to GitHub Releases (https://github.com/FairwindsOps/helm-release-pruner/releases).
-  # Requires GITHUB_TOKEN with repo scope in the org-global context (or add vault + get_vault_env if you store it there).
-  github_release:
-    executor: goreleaser
-    working_directory: /home/circleci/project
-    steps:
-      - checkout
-      - run:
-          name: Publish GitHub Release
-          command: |
-            goreleaser release --clean --skip=docker,brews
-          environment:
-            GITHUB_TOKEN: $GITHUB_TOKEN
+      - run: echo 'export GORELEASER_CURRENT_TAG="${CIRCLE_TAG}"' >> $BASH_ENV
+      - run: goreleaser release --clean
 
 workflows:
   version: 2
@@ -179,14 +165,7 @@ workflows:
 
   release:
     jobs:
-      - prep_vars_and_release:
-          context: org-global
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /.*/
-      - github_release:
+      - release:
           context: org-global
           filters:
             branches:
