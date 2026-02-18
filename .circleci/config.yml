@@ -21,13 +21,13 @@ executors:
 
 references:
   e2e_configuration: &e2e_configuration
+    executor: golang-exec
     pre_script: e2e/pre-e2e.sh
     script: e2e/run-e2e.sh
     command_runner_image: quay.io/reactiveops/ci-images:v14.1-bullseye
     requires:
       - test
       - lint
-      - build_docker
     filters:
       branches:
         only: /.*/
@@ -44,6 +44,18 @@ references:
         sha256sum vault_1.12.2_linux_amd64.zip | grep 116c143de377a77a7ea455a367d5e9fe5290458e8a941a6e2dd85d92aaedba67
         unzip vault_1.12.2_linux_amd64.zip
         mv vault /usr/bin/vault
+
+  # For jobs using Debian/Ubuntu images (e.g. golang-exec / cimg/go)
+  install_vault_apt: &install_vault_apt
+    run:
+      name: install hashicorp vault
+      command: |
+        sudo apt-get update -y && sudo apt-get install -y curl unzip yq
+        cd /tmp
+        curl -LO https://releases.hashicorp.com/vault/1.12.2/vault_1.12.2_linux_amd64.zip
+        sha256sum vault_1.12.2_linux_amd64.zip | grep 116c143de377a77a7ea455a367d5e9fe5290458e8a941a6e2dd85d92aaedba67
+        unzip -o vault_1.12.2_linux_amd64.zip
+        sudo mv vault /usr/local/bin/vault
 
 jobs:
   test:
@@ -72,10 +84,12 @@ jobs:
           command: golangci-lint run --timeout 5m
 
   build_docker:
-    docker:
-      - image: cimg/base:current
+    executor: golang-exec
     steps:
       - checkout
+      - run:
+          name: Build binary for Docker
+          command: go build -o helm-release-pruner ./cmd/pruner
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
@@ -83,25 +97,28 @@ jobs:
           command: docker build -t helm-release-pruner:test .
 
   push_docker:
-    working_directory: /home/circleci/src/github.com/fairwindsops/helm-release-pruner
-    docker:
-      - image: quay.io/reactiveops/ci-images:v14-alpine
-    resource_class: large
-    shell: /bin/bash
+    executor: golang-exec
+    working_directory: /home/circleci/project
     steps:
       - checkout
-      - setup_remote_docker
-      - *install_vault_alpine
+      - run:
+          name: Build binary for Docker
+          command: CGO_ENABLED=0 GOOS=linux go build -o helm-release-pruner ./cmd/pruner
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - *install_vault_apt
       - rok8s/get_vault_env:
           vault_path: repo/global/env
       - rok8s/set_env
       - rok8s/docker_login:
+          registry: "quay.io"
           username: $FAIRWINDS_QUAY_USER
           password-variable: FAIRWINDS_QUAY_TOKEN
-      - rok8s/docker_build:
-          config: .circleci/build.config
-      - rok8s/docker_push:
-          config: .circleci/build.config
+      - run:
+          name: Build and push image to quay
+          command: |
+            docker build -t quay.io/fairwinds/helm-release-pruner:snapshot .
+            docker push quay.io/fairwinds/helm-release-pruner:snapshot
 
   release:
     working_directory: /home/circleci/project
@@ -124,6 +141,20 @@ jobs:
       - run: echo 'export GORELEASER_CURRENT_TAG="${CIRCLE_TAG}"' >> $BASH_ENV
       - run: goreleaser release --clean
 
+  snapshot:
+    working_directory: /home/circleci/project
+    resource_class: large
+    docker:
+      - image: goreleaser/goreleaser:v2.13.1
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: docker27
+      - run: goreleaser release --snapshot --clean
+      - store_artifacts:
+          path: dist
+          destination: snapshot
+
 workflows:
   version: 2
   ci:
@@ -134,23 +165,25 @@ workflows:
           requires:
             - test
             - lint
+      - snapshot:
+          requires:
+            - test
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              ignore: /.*/
       - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.33"
           kind_node_image: "kindest/node:v1.33.0"
-          executor:
-            name: ci-images-large
           <<: *e2e_configuration
       - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.34"
           kind_node_image: "kindest/node:v1.34.0"
-          executor:
-            name: ci-images-large
           <<: *e2e_configuration
       - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.35"
           kind_node_image: "kindest/node:v1.35.0"
-          executor:
-            name: ci-images-large
           <<: *e2e_configuration
       - push_docker:
           requires:
