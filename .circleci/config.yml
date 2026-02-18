@@ -103,8 +103,6 @@ jobs:
       - rok8s/docker_push:
           config: .circleci/build.config
 
-  # Single release job (like insights-cli): goreleaser publishes to GitHub Releases, Quay Docker, and Homebrew.
-  # Requires in vault (repo/global/env or repo/helm-release-pruner/env): GITHUB_TOKEN, FAIRWINDS_QUAY_USER, FAIRWINDS_QUAY_TOKEN.
   release:
     working_directory: /home/circleci/project
     resource_class: large
