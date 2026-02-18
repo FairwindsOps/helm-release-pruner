@@ -172,7 +172,7 @@ metadata:
   name: $job_name
   namespace: default
 spec:
-  ttlSecondsAfterFinished: 60
+  ttlSecondsAfterFinished: 300
   backoffLimit: 0
   template:
     spec:
@@ -185,15 +185,16 @@ spec:
         args: $(printf '%s\n' "${all_args[@]}" | jq -R . | jq -s .)
 EOF
     
-    # Wait for job to complete
-    kubectl wait --for=condition=complete --timeout=120s "job/$job_name" -n default || {
+    # Wait for job to complete (or failed, so we don't wait full timeout and miss logs before TTL)
+    if ! kubectl wait --for=condition=complete --timeout=90s "job/$job_name" -n default 2>/dev/null; then
+        kubectl wait --for=condition=failed --timeout=15s "job/$job_name" -n default 2>/dev/null || true
         log_error "Pruner job failed. Logs:"
-        kubectl logs "job/$job_name" -n default || true
+        kubectl logs "job/$job_name" -n default 2>/dev/null || kubectl logs -l job-name="$job_name" -n default --tail=200 2>/dev/null || true
+        kubectl describe job "$job_name" -n default 2>/dev/null || true
         kubectl delete job "$job_name" -n default --ignore-not-found >/dev/null 2>&1
         return 1
-    }
+    fi
     
-    # Show logs
     kubectl logs "job/$job_name" -n default
     kubectl delete job "$job_name" -n default --ignore-not-found >/dev/null 2>&1
 }
