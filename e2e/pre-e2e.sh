@@ -5,6 +5,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Ensure we run from repo root (rok8s orb may invoke from another directory)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+echo "=== Working in repo root: $REPO_ROOT ==="
+
 echo "=== Building helm-release-pruner binary (Dockerfile expects pre-built binary) ==="
 if command -v go >/dev/null 2>&1; then
   go build -o helm-release-pruner ./cmd/pruner
@@ -35,6 +40,6 @@ else
 fi
 
 echo "=== Copying workspace to command runner ==="
-docker cp "$(pwd)" e2e-command-runner:/helm-release-pruner
+docker cp "$REPO_ROOT" e2e-command-runner:/helm-release-pruner
 
 echo "=== Pre-e2e setup complete ==="
