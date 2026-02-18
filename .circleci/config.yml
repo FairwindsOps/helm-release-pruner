@@ -72,16 +72,12 @@ jobs:
           command: golangci-lint run --timeout 5m
 
   build_docker:
-    docker:
-      - image: cimg/base:current
+    executor: golang-exec
     steps:
       - checkout
       - run:
           name: Build binary for Docker
-          command: |
-            # Dockerfile expects pre-built binary (same as GoReleaser); build it first.
-            docker run --rm -v "$(pwd):/app" -w /app cimg/go:1.25 \
-              go build -o helm-release-pruner ./cmd/pruner
+          command: go build -o helm-release-pruner ./cmd/pruner
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
