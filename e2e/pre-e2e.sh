@@ -5,6 +5,13 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+echo "=== Building helm-release-pruner binary (Dockerfile expects pre-built binary) ==="
+if command -v go >/dev/null 2>&1; then
+  go build -o helm-release-pruner ./cmd/pruner
+else
+  docker run --rm -v "$(pwd):/app" -w /app golang:1.25-alpine go build -o helm-release-pruner ./cmd/pruner
+fi
+
 echo "=== Building helm-release-pruner image ==="
 docker build -t helm-release-pruner:test .
 

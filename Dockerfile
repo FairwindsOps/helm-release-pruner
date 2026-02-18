@@ -1,5 +1,3 @@
-# Same pattern as pluto and insights-cli: GoReleaser builds the binary per platform;
-# this image only copies it. No RUN steps, so multi-arch builds work without QEMU.
 FROM alpine:3.21
 
 LABEL org.opencontainers.image.authors="FairwindsOps, Inc." \
