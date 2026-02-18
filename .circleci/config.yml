@@ -7,6 +7,10 @@ executors:
   golang-exec:
     docker:
       - image: cimg/go:1.25
+  goreleaser:
+    resource_class: large
+    docker:
+      - image: goreleaser/goreleaser:v2.13.1
   ci-images:
     docker:
       - image: quay.io/reactiveops/ci-images:v14.1-bullseye
@@ -120,6 +124,20 @@ jobs:
       - rok8s/docker_push:
           config: .circleci/build.config
 
+  # Publishes binaries and changelog to GitHub Releases (https://github.com/FairwindsOps/helm-release-pruner/releases).
+  # Requires GITHUB_TOKEN with repo scope in the org-global context (or add vault + get_vault_env if you store it there).
+  github_release:
+    executor: goreleaser
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - run:
+          name: Publish GitHub Release
+          command: |
+            goreleaser release --clean --skip=docker,brews
+          environment:
+            GITHUB_TOKEN: $GITHUB_TOKEN
+
 workflows:
   version: 2
   ci:
@@ -162,6 +180,14 @@ workflows:
   release:
     jobs:
       - prep_vars_and_release:
+          context: org-global
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /.*/
+      - github_release:
+          context: org-global
           filters:
             branches:
               ignore: /.*/
