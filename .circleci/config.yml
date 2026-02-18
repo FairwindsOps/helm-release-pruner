@@ -84,7 +84,6 @@ jobs:
           name: Build Docker Image
           command: docker build -t helm-release-pruner:test .
 
-  # Push image to quay for snapshot/main branch (uses golang-exec so we have Go; no "docker run golang" mount)
   push_docker:
     executor: golang-exec
     working_directory: /home/circleci/project
