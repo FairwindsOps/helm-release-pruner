@@ -9,7 +9,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 echo "=== Building helm-release-pruner binary (Dockerfile expects pre-built binary) ==="
-go build -o helm-release-pruner ./cmd/pruner
+# Build for Linux so the image runs in the container (works on Mac local and CI Linux)
+CGO_ENABLED=0 GOOS=linux go build -o helm-release-pruner ./cmd/pruner
 
 echo "=== Building helm-release-pruner image ==="
 docker build -t helm-release-pruner:test .
