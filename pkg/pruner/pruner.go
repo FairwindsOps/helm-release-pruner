@@ -2,10 +2,12 @@ package pruner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -196,7 +198,8 @@ func (p *Pruner) pruneReleases(ctx context.Context) error {
 				p.logger.Error("failed to delete release",
 					"name", rel.Name,
 					"namespace", rel.Namespace,
-					"error", err)
+					"error", err,
+					"error_chain", errorChainString(err))
 				continue
 			}
 			releasesDeletedTotal.Inc()
@@ -577,9 +580,21 @@ func (p *Pruner) deleteRelease(ctx context.Context, name, namespace string) erro
 
 	uninstall := action.NewUninstall(actionConfig)
 	uninstall.WaitStrategy = kube.LegacyStrategy
-	uninstall.Timeout = 5 * time.Minute
+	uninstall.Timeout = 10 * time.Minute
 	_, err := uninstall.Run(name)
-	return err
+	if err != nil {
+		return fmt.Errorf("uninstall %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
+// errorChainString returns the full error chain for logging (root cause last).
+func errorChainString(err error) string {
+	var parts []string
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		parts = append(parts, e.Error())
+	}
+	return strings.Join(parts, " <- ")
 }
 
 func (p *Pruner) deleteNamespaceIfEmpty(ctx context.Context, namespace string) error {
