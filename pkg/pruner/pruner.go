@@ -580,7 +580,7 @@ func (p *Pruner) deleteRelease(ctx context.Context, name, namespace string) erro
 
 	uninstall := action.NewUninstall(actionConfig)
 	uninstall.WaitStrategy = kube.LegacyStrategy
-	uninstall.Timeout = 5 * time.Minute
+	uninstall.Timeout = 10 * time.Minute
 	_, err := uninstall.Run(name)
 	if err != nil {
 		return fmt.Errorf("uninstall %s/%s: %w", namespace, name, err)
