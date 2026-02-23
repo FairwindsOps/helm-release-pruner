@@ -1,6 +1,6 @@
 module github.com/FairwindsOps/helm-release-pruner
 
-go 1.25
+go 1.26
 
 require (
 	github.com/prometheus/client_golang v1.22.0
