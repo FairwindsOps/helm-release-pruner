@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/prometheus/client_golang v1.22.0
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	helm.sh/helm/v4 v4.0.0
 	k8s.io/apimachinery v0.34.1
 	k8s.io/client-go v0.34.1
