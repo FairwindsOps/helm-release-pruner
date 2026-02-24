@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"regexp"
+	"slices"
 	"testing"
 	"time"
 
@@ -126,11 +127,11 @@ func TestSelectReleasesToDelete_MaxReleasesGlobal(t *testing.T) {
 	// Create releases from different apps with varying ages
 	// The --max-releases-to-keep is applied GLOBALLY, keeping the N newest
 	releases := []*releasev1.Release{
-		mockRelease("app-a", "ns-a", now.Add(-1*time.Hour)),  // newest
-		mockRelease("app-b", "ns-b", now.Add(-2*time.Hour)),  // 2nd newest
-		mockRelease("app-c", "ns-c", now.Add(-3*time.Hour)),  // 3rd newest
-		mockRelease("app-d", "ns-d", now.Add(-4*time.Hour)),  // 4th newest
-		mockRelease("app-e", "ns-e", now.Add(-5*time.Hour)),  // oldest
+		mockRelease("app-a", "ns-a", now.Add(-1*time.Hour)), // newest
+		mockRelease("app-b", "ns-b", now.Add(-2*time.Hour)), // 2nd newest
+		mockRelease("app-c", "ns-c", now.Add(-3*time.Hour)), // 3rd newest
+		mockRelease("app-d", "ns-d", now.Add(-4*time.Hour)), // 4th newest
+		mockRelease("app-e", "ns-e", now.Add(-5*time.Hour)), // oldest
 	}
 
 	tests := []struct {
@@ -317,13 +318,7 @@ func TestSystemNamespaces(t *testing.T) {
 	}
 
 	for _, ns := range expectedProtected {
-		found := false
-		for _, defaultNS := range defaultSystemNamespaces {
-			if defaultNS == ns {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(defaultSystemNamespaces, ns)
 		if !found {
 			t.Errorf("expected %q to be a protected system namespace", ns)
 		}

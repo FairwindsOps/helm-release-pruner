@@ -2,12 +2,10 @@ package pruner
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -65,10 +63,10 @@ type Pruner struct {
 	logger           *slog.Logger
 	systemNamespaces map[string]bool
 
-	ready         atomic.Bool
-	initialized   atomic.Bool
+	ready               atomic.Bool
+	initialized         atomic.Bool
 	consecutiveFailures int
-	mu            sync.Mutex
+	mu                  sync.Mutex
 }
 
 // New creates a new Pruner instance.
@@ -198,8 +196,7 @@ func (p *Pruner) pruneReleases(ctx context.Context) error {
 				p.logger.Error("failed to delete release",
 					"name", rel.Name,
 					"namespace", rel.Namespace,
-					"error", err,
-					"error_chain", errorChainString(err))
+					"error", err)
 				continue
 			}
 			releasesDeletedTotal.Inc()
@@ -357,26 +354,20 @@ func CalculateBackoff(consecutiveFailures int) time.Duration {
 		return 0
 	}
 
-	shift := consecutiveFailures - 1
-	if shift > maxBackoffShift {
-		shift = maxBackoffShift
-	}
+	shift := min(consecutiveFailures-1, maxBackoffShift)
 
 	seconds := 1
 	for i := 0; i < shift; i++ {
 		seconds *= 2
 	}
-	backoff := time.Duration(seconds) * time.Second
-	if backoff > maxBackoff {
-		backoff = maxBackoff
-	}
+	backoff := min(time.Duration(seconds)*time.Second, maxBackoff)
 
 	return backoff
 }
 
 // RunDaemon runs prune cycles at the configured interval until context is cancelled.
 func (p *Pruner) RunDaemon(ctx context.Context) error {
-		p.logger.Info("starting daemon",
+	p.logger.Info("starting daemon",
 		"interval", p.opts.Interval,
 		"dry_run", p.opts.DryRun,
 		"cleanup_orphan_namespaces", p.opts.CleanupOrphanNamespaces)
@@ -586,15 +577,6 @@ func (p *Pruner) deleteRelease(ctx context.Context, name, namespace string) erro
 		return fmt.Errorf("uninstall %s/%s: %w", namespace, name, err)
 	}
 	return nil
-}
-
-// errorChainString returns the full error chain for logging (root cause last).
-func errorChainString(err error) string {
-	var parts []string
-	for e := err; e != nil; e = errors.Unwrap(e) {
-		parts = append(parts, e.Error())
-	}
-	return strings.Join(parts, " <- ")
 }
 
 func (p *Pruner) deleteNamespaceIfEmpty(ctx context.Context, namespace string) error {
