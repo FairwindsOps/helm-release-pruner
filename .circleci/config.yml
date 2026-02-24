@@ -6,11 +6,11 @@ orbs:
 executors:
   golang-exec:
     docker:
-      - image: cimg/go:1.25
+      - image: cimg/go:1.26
   goreleaser:
     resource_class: large
     docker:
-      - image: goreleaser/goreleaser:v2.13.1
+      - image: goreleaser/goreleaser:v2.14.0
   ci-images:
     docker:
       - image: quay.io/reactiveops/ci-images:v14.1-bullseye
@@ -125,7 +125,7 @@ jobs:
     resource_class: large
     shell: /bin/bash
     docker:
-      - image: goreleaser/goreleaser:v2.13.1
+      - image: goreleaser/goreleaser:v2.14.0
     steps:
       - checkout
       - *install_vault_alpine
@@ -145,7 +145,7 @@ jobs:
     working_directory: /home/circleci/project
     resource_class: large
     docker:
-      - image: goreleaser/goreleaser:v2.13.1
+      - image: goreleaser/goreleaser:v2.14.0
     steps:
       - checkout
       - setup_remote_docker:
