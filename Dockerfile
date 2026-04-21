@@ -12,4 +12,3 @@ LABEL org.opencontainers.image.authors="FairwindsOps, Inc." \
 USER nobody
 COPY helm-release-pruner /
 ENTRYPOINT ["/helm-release-pruner"]
-
