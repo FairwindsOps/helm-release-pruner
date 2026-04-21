@@ -9,8 +9,6 @@ LABEL org.opencontainers.image.authors="FairwindsOps, Inc." \
       org.opencontainers.image.url="https://github.com/FairwindsOps/helm-release-pruner" \
       org.opencontainers.image.licenses="Apache License 2.0"
 
-RUN apk --no-cache add ca-certificates
-
 USER nobody
 COPY helm-release-pruner /
 ENTRYPOINT ["/helm-release-pruner"]
