@@ -1,4 +1,4 @@
-FROM alpine:3.23
+FROM alpine:3.23.4
 
 LABEL org.opencontainers.image.authors="FairwindsOps, Inc." \
       org.opencontainers.image.vendor="FairwindsOps, Inc." \
@@ -8,6 +8,8 @@ LABEL org.opencontainers.image.authors="FairwindsOps, Inc." \
       org.opencontainers.image.source="https://github.com/FairwindsOps/helm-release-pruner" \
       org.opencontainers.image.url="https://github.com/FairwindsOps/helm-release-pruner" \
       org.opencontainers.image.licenses="Apache License 2.0"
+
+RUN apk --no-cache add ca-certificates
 
 USER nobody
 COPY helm-release-pruner /
