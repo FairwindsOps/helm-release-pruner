@@ -1,4 +1,4 @@
-FROM alpine:3.23
+FROM alpine:3.23.4
 
 LABEL org.opencontainers.image.authors="FairwindsOps, Inc." \
       org.opencontainers.image.vendor="FairwindsOps, Inc." \
@@ -12,4 +12,3 @@ LABEL org.opencontainers.image.authors="FairwindsOps, Inc." \
 USER nobody
 COPY helm-release-pruner /
 ENTRYPOINT ["/helm-release-pruner"]
-
