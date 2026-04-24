@@ -296,6 +296,44 @@ go test ./...
 ./helm-release-pruner --dry-run --older-than=1w --interval=5m --debug
 ```
 
+## Notice: Registry Migration and Immutable Images (v4.0.7 → v4.1.0)
+
+Starting with **v4.1.0**:
+
+- Images moved to `us-docker.pkg.dev/fairwinds-ops/oss/helm-release-pruner`
+- `quay.io/fairwinds/helm-release-pruner` is deprecated
+
+### Required action
+
+```diff
+- quay.io/fairwinds/helm-release-pruner:<tag>
++ us-docker.pkg.dev/fairwinds-ops/oss/helm-release-pruner:<tag>
+```
+
+---
+
+## Immutable and signed images
+
+* Images are now **signed**
+* Tags are **immutable**
+* No more floating tags:
+
+  * `v4`
+  * `v4.0`
+  * `latest`
+
+Use full version tags:
+
+```
+us-docker.pkg.dev/fairwinds-ops/oss/helm-release-pruner:v<major>.<minor>.<patch>
+```
+
+Or pin by digest:
+
+```
+us-docker.pkg.dev/fairwinds-ops/oss/helm-release-pruner@sha256:<digest>
+```
+
 <!-- Begin boilerplate -->
 ## Join the Fairwinds Open Source Community
 
