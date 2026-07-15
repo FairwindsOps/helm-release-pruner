@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// LabelSelector represents a single label filter condition.
+type LabelSelector struct {
+	Key   string
+	Value *regexp.Regexp
+}
+
 // Options configures the pruner behavior.
 type Options struct {
 	// Interval is how often to run the pruning loop.
@@ -56,6 +62,14 @@ type Options struct {
 	// This prevents overwhelming the Kubernetes API server.
 	// 0 means no rate limiting.
 	DeleteRateLimit time.Duration
+
+	// LabelFilter is a list of label selectors that releases must match to be considered.
+	// All selectors must match (AND semantics). Empty means no label-based inclusion filter.
+	LabelFilter []LabelSelector
+
+	// LabelExclude is a list of label selectors that exclude matching releases.
+	// If any selector matches, the release is excluded (AND semantics within the list).
+	LabelExclude []LabelSelector
 
 	// AdditionalSystemNamespaces is a list of namespace names that should be
 	// treated as system namespaces and never deleted. These are added to the
