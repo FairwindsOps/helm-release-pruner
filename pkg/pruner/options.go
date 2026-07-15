@@ -68,7 +68,7 @@ type Options struct {
 	LabelFilter []LabelSelector
 
 	// LabelExclude is a list of label selectors that exclude matching releases.
-	// If any selector matches, the release is excluded (AND semantics within the list).
+	// All selectors must match (AND semantics). Empty means no label-based exclusion filter.
 	LabelExclude []LabelSelector
 
 	// AdditionalSystemNamespaces is a list of namespace names that should be
