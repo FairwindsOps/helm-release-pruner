@@ -50,6 +50,8 @@ The pruner runs as a daemon by default, executing prune cycles at the configured
 | `--namespace-filter` | | Regex to include matching namespaces |
 | `--release-exclude` | | Regex to exclude matching release names |
 | `--namespace-exclude` | | Regex to exclude matching namespaces |
+| `--label-filter` | | Label selector a release must match to be considered (`key=value` or `key`; repeatable, AND semantics) |
+| `--label-exclude` | | Label selector that excludes matching releases (`key=value` or `key`; repeatable, AND semantics) |
 | `--preserve-namespace` | `false` | Don't delete empty namespaces |
 | `--cleanup-orphan-namespaces` | `false` | Delete namespaces with no Helm releases (requires `--orphan-namespace-filter`) |
 | `--orphan-namespace-filter` | | Regex filter for orphan namespace cleanup (required with `--cleanup-orphan-namespaces`) |
@@ -93,6 +95,18 @@ helm-release-pruner \
   --interval=6h \
   --max-releases-to-keep=5 \
   --release-exclude="-permanent$"
+```
+
+Prune only releases labeled for weekly garbage collection:
+
+```bash
+helm-release-pruner --older-than=1w --label-filter="gc-policy=weekly"
+```
+
+Prune all old releases, skipping those marked to be kept:
+
+```bash
+helm-release-pruner --older-than=1w --label-exclude="gc-policy=keep"
 ```
 
 Dry run to preview deletions:
