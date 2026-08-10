@@ -6,11 +6,11 @@ orbs:
 executors:
   golang-exec:
     docker:
-      - image: cimg/go:1.26.2
+      - image: cimg/go:1.26.5
   goreleaser:
     resource_class: large
     docker:
-      - image: goreleaser/goreleaser:v2.15.4
+      - image: goreleaser/goreleaser:v2.17.1
   ci-images:
     docker:
       - image: quay.io/reactiveops/ci-images:v14.1-bullseye
@@ -125,7 +125,7 @@ jobs:
     resource_class: large
     shell: /bin/bash
     docker:
-      - image: goreleaser/goreleaser:v2.15.4
+      - image: goreleaser/goreleaser:v2.17.1
     steps:
       - checkout
       - *install_vault_alpine
@@ -149,7 +149,7 @@ jobs:
     working_directory: /home/circleci/project
     resource_class: large
     docker:
-      - image: goreleaser/goreleaser:v2.15.4
+      - image: goreleaser/goreleaser:v2.17.1
     steps:
       - checkout
       - setup_remote_docker:
@@ -179,15 +179,15 @@ workflows:
               ignore: /.*/
       - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.33"
-          kind_node_image: "kindest/node:v1.33.0"
+          kind_node_image: "kindest/node:v1.36.1"
           <<: *e2e_configuration
       - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.34"
-          kind_node_image: "kindest/node:v1.34.0"
+          kind_node_image: "kindest/node:v1.36.1"
           <<: *e2e_configuration
       - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.35"
-          kind_node_image: "kindest/node:v1.35.0"
+          kind_node_image: "kindest/node:v1.36.1"
           <<: *e2e_configuration
       - push_docker:
           requires:
