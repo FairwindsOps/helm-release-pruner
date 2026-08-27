@@ -6,7 +6,7 @@ orbs:
 executors:
   golang-exec:
     docker:
-      - image: cimg/go:1.26.5
+      - image: cimg/go:1.26.7
   goreleaser:
     resource_class: large
     docker:
