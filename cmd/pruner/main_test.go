@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra" //nolint:depguard
 )
 
 func TestParseDuration(t *testing.T) {
@@ -59,6 +61,144 @@ func TestParseDuration(t *testing.T) {
 
 			if got != tt.expected {
 				t.Errorf("parseDuration(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseLabelSelector(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantKey     string
+		wantPattern string
+		wantErr     bool
+	}{
+		{
+			input:       "env=preview",
+			wantKey:     "env",
+			wantPattern: "preview",
+		},
+		{
+			input:       "gc-policy=weekly",
+			wantKey:     "gc-policy",
+			wantPattern: "weekly",
+		},
+		{
+			input:       "ephemeral",
+			wantKey:     "ephemeral",
+			wantPattern: ".*",
+		},
+		{
+			input:       "key=",
+			wantKey:     "key",
+			wantPattern: "",
+		},
+		{
+			input:       "env=prev.*",
+			wantKey:     "env",
+			wantPattern: "prev.*",
+		},
+		{
+			input:   "",
+			wantErr: true,
+		},
+		{
+			input:   "=value",
+			wantErr: true,
+		},
+		{
+			input:   "key=[invalid",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := parseLabelSelector(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseLabelSelector(%q) expected error, got nil", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("parseLabelSelector(%q) unexpected error: %v", tt.input, err)
+				return
+			}
+			if got.Key != tt.wantKey {
+				t.Errorf("parseLabelSelector(%q).Key = %q, want %q", tt.input, got.Key, tt.wantKey)
+			}
+			if got.Value.String() != tt.wantPattern {
+				t.Errorf("parseLabelSelector(%q).Value = %q, want %q", tt.input, got.Value.String(), tt.wantPattern)
+			}
+		})
+	}
+}
+
+func TestLabelFlagsValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{
+			name:    "valid label-filter key=value",
+			args:    []string{"--label-filter", "env=preview", "--older-than", "1h", "--once"},
+			wantErr: false,
+		},
+		{
+			name:    "valid label-filter existence only",
+			args:    []string{"--label-filter", "ephemeral", "--older-than", "1h", "--once"},
+			wantErr: false,
+		},
+		{
+			name:    "repeated label-filter",
+			args:    []string{"--label-filter", "env=preview", "--label-filter", "gc-policy=weekly", "--older-than", "1h", "--once"},
+			wantErr: false,
+		},
+		{
+			name:    "valid label-exclude",
+			args:    []string{"--label-exclude", "protected", "--older-than", "1h", "--once"},
+			wantErr: false,
+		},
+		{
+			name:    "label-filter alone satisfies filter requirement",
+			args:    []string{"--label-filter", "env=preview", "--once"},
+			wantErr: false,
+		},
+		{
+			name:    "label-exclude alone satisfies filter requirement",
+			args:    []string{"--label-exclude", "env=production", "--once"},
+			wantErr: false,
+		},
+		{
+			name:    "invalid label-filter empty key",
+			args:    []string{"--label-filter", "=badvalue", "--older-than", "1h", "--once"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid label-exclude empty key",
+			args:    []string{"--label-exclude", "=badvalue", "--older-than", "1h", "--once"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid label-filter empty string",
+			args:    []string{"--label-filter", "", "--older-than", "1h", "--once"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newRootCmd()
+			cmd.RunE = func(c *cobra.Command, args []string) error { return nil }
+			cmd.SetArgs(tt.args)
+			err := cmd.Execute()
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error for args %v, got nil", tt.args)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error for args %v: %v", tt.args, err)
 			}
 		})
 	}

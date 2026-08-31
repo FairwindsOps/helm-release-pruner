@@ -150,7 +150,9 @@ func (p *Pruner) hasReleasePruningFilters() bool {
 		p.opts.ReleaseFilter != nil ||
 		p.opts.NamespaceFilter != nil ||
 		p.opts.ReleaseExclude != nil ||
-		p.opts.NamespaceExclude != nil
+		p.opts.NamespaceExclude != nil ||
+		len(p.opts.LabelFilter) > 0 ||
+		len(p.opts.LabelExclude) > 0
 }
 
 func (p *Pruner) pruneReleases(ctx context.Context) error {
@@ -501,10 +503,42 @@ func (p *Pruner) filterReleases(releases []*releasev1.Release) []*releasev1.Rele
 			}
 		}
 
+		if len(p.opts.LabelFilter) > 0 {
+			if !releaseMatchesLabelSelectors(rel, p.opts.LabelFilter) {
+				p.logger.Debug("skipping release (label filter)",
+					"name", rel.Name,
+					"namespace", rel.Namespace)
+				continue
+			}
+		}
+
+		if len(p.opts.LabelExclude) > 0 {
+			if releaseMatchesLabelSelectors(rel, p.opts.LabelExclude) {
+				p.logger.Debug("skipping release (label exclude)",
+					"name", rel.Name,
+					"namespace", rel.Namespace)
+				continue
+			}
+		}
+
 		filtered = append(filtered, rel)
 	}
 
 	return filtered
+}
+
+// releaseMatchesLabelSelectors returns true if the release matches all selectors (AND semantics).
+func releaseMatchesLabelSelectors(rel *releasev1.Release, selectors []LabelSelector) bool {
+	for _, sel := range selectors {
+		val, exists := rel.Labels[sel.Key]
+		if !exists {
+			return false
+		}
+		if !sel.Value.MatchString(val) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Pruner) selectReleasesToDelete(releases []*releasev1.Release) []*releasev1.Release {
