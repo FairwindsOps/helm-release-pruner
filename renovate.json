@@ -67,7 +67,6 @@
     {
       "description": "Group all non-major (minor + patch) updates into a single PR",
       "matchUpdateTypes": ["minor", "patch", "digest", "lockFileMaintenance"],
-      "matchPackageNames": ["!kindest/node"],
       "groupName": "all non-major dependencies",
       "groupSlug": "all-non-major",
       "minimumReleaseAge": "7 days"
