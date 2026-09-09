@@ -56,10 +56,12 @@
       "customType": "regex",
       "managerFilePatterns": ["/(^|/)\\.circleci/config\\.yml$/"],
       "matchStrings": [
-        "kind_node_image:\\s*\"kindest/node:(?<currentValue>v[^\"\\s]+)\""
+        "kind_node_image:\\s*\"kindest/node:(?<currentValue>v(?<kubeMinor>\\d+\\.\\d+)\\.[^\"\\s]+)\""
       ],
-      "depNameTemplate": "kindest/node",
+      "depNameTemplate": "kindest/node-{{kubeMinor}}",
+      "packageNameTemplate": "kindest/node",
       "datasourceTemplate": "docker",
+      "versioningTemplate": "semver",
       "autoReplaceStringTemplate": "kind_node_image: \"kindest/node:{{{newValue}}}\""
     }
   ],
@@ -67,6 +69,7 @@
     {
       "description": "Group all non-major (minor + patch) updates into a single PR",
       "matchUpdateTypes": ["minor", "patch", "digest", "lockFileMaintenance"],
+      "matchPackageNames": ["!/^kindest\\/node/"],
       "groupName": "all non-major dependencies",
       "groupSlug": "all-non-major",
       "minimumReleaseAge": "7 days"
@@ -92,6 +95,19 @@
       "groupName": "HashiCorp Vault",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["hashicorp/vault"]
+    },
+    {
+      "description": "Split kindest/node patch vs Kubernetes minor so each e2e image can patch independently",
+      "matchPackageNames": ["/^kindest\\/node/"],
+      "matchManagers": ["custom.regex"],
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Only patch-bump kindest/node e2e images (keep each Kubernetes minor pinned)",
+      "matchPackageNames": ["/^kindest\\/node/"],
+      "matchManagers": ["custom.regex"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
     }
   ]
 }
