@@ -13,18 +13,18 @@ executors:
       - image: goreleaser/goreleaser:v2.18.0
   ci-images:
     docker:
-      - image: quay.io/reactiveops/ci-images:v14.1-bullseye
+      - image: quay.io/reactiveops/ci-images:v17.0-cimg-24.04
   ci-images-large:
     resource_class: large
     docker:
-      - image: quay.io/reactiveops/ci-images:v14.1-bullseye
+      - image: quay.io/reactiveops/ci-images:v17.0-cimg-24.04
 
 references:
   e2e_configuration: &e2e_configuration
     executor: golang-exec
     pre_script: e2e/pre-e2e.sh
     script: e2e/run-e2e.sh
-    command_runner_image: quay.io/reactiveops/ci-images:v14.1-bullseye
+    command_runner_image: quay.io/reactiveops/ci-images:v17.0-cimg-24.04
     requires:
       - test
       - lint
