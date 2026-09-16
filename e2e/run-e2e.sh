@@ -5,6 +5,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+mkdir -p /tmp/test-results
+
 echo "=== helm-release-pruner E2E Tests ==="
 echo "Helm version: $(helm version --short)"
 echo "Kubectl version: $(kubectl version --client --short 2>/dev/null || kubectl version --client)"

@@ -1,174 +1,130 @@
+## DO NOT EDIT - Managed by Terraform
 version: 2.1
 
 orbs:
   rok8s: fairwinds/rok8s-scripts@17.0.0
 
-executors:
-  golang-exec:
-    docker:
-      - image: cimg/go:1.27.1
-  goreleaser:
-    resource_class: large
-    docker:
-      - image: goreleaser/goreleaser:v2.18.0
-  ci-images:
-    docker:
-      - image: quay.io/reactiveops/ci-images:v17.0-cimg-24.04
-  ci-images-large:
-    resource_class: large
-    docker:
-      - image: quay.io/reactiveops/ci-images:v17.0-cimg-24.04
-
 references:
+  install_vault_machine: &install_vault_machine
+    run:
+      name: install hashicorp vault
+      command: |
+        sudo apt-get update -y && sudo apt-get install -y curl unzip
+        cd /tmp
+        curl -LO https://releases.hashicorp.com/vault/1.21.4/vault_1.21.4_linux_amd64.zip
+        echo '889b681990fe221b884b7932fa9c9dd0ee9811b9349554f1aa287ab63c9f3dae  vault_1.21.4_linux_amd64.zip' | sha256sum -c
+        unzip -o vault_1.21.4_linux_amd64.zip
+        sudo mv vault /usr/bin/vault
+  setup_qemu_binfmt: &setup_qemu_binfmt
+    run:
+      name: Setup QEMU for multi-arch Docker builds
+      command: |
+        sudo apt-get update -y
+        sudo apt-get install -y qemu-user-static binfmt-support
+        docker buildx create --use || true
+        docker buildx inspect --bootstrap
   e2e_configuration: &e2e_configuration
     executor: golang-exec
     pre_script: e2e/pre-e2e.sh
     script: e2e/run-e2e.sh
     command_runner_image: quay.io/reactiveops/ci-images:v17.0-cimg-24.04
+    enable_docker_layer_caching: true
+    store-test-results: /tmp/test-results
     requires:
       - test
-      - lint
     filters:
       branches:
         only: /.*/
       tags:
         ignore: /.*/
 
-  install_vault_alpine: &install_vault_alpine
-    run:
-      name: install hashicorp vault
-      command: |
-        apk --update add curl yq
-        cd /tmp
-        curl -LO https://releases.hashicorp.com/vault/1.12.2/vault_1.12.2_linux_amd64.zip
-        sha256sum vault_1.12.2_linux_amd64.zip | grep 116c143de377a77a7ea455a367d5e9fe5290458e8a941a6e2dd85d92aaedba67
-        unzip vault_1.12.2_linux_amd64.zip
-        mv vault /usr/bin/vault
-
-  # For jobs using Debian/Ubuntu images (e.g. golang-exec / cimg/go)
-  install_vault_apt: &install_vault_apt
-    run:
-      name: install hashicorp vault
-      command: |
-        sudo apt-get update -y && sudo apt-get install -y curl unzip yq
-        cd /tmp
-        curl -LO https://releases.hashicorp.com/vault/1.12.2/vault_1.12.2_linux_amd64.zip
-        sha256sum vault_1.12.2_linux_amd64.zip | grep 116c143de377a77a7ea455a367d5e9fe5290458e8a941a6e2dd85d92aaedba67
-        unzip -o vault_1.12.2_linux_amd64.zip
-        sudo mv vault /usr/local/bin/vault
+executors:
+  golang-exec:
+    docker:
+      - image: cimg/go:1.27.1
 
 jobs:
   test:
-    executor: golang-exec
+    docker:
+      - image: cimg/go:1.27.1
     steps:
       - checkout
       - run:
           name: Go Mod Download
-          command: go mod download
+          command: go mod download && go mod verify
       - run:
-          name: Run Tests
-          command: go test -v -race -coverprofile=coverage.out ./...
-      - run:
-          name: Build Binary
-          command: go build -o helm-release-pruner ./cmd/pruner
-
-  lint:
-    executor: golang-exec
-    steps:
-      - checkout
-      - run:
-          name: Install golangci-lint
-          command: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-      - run:
-          name: Run Linter
-          command: golangci-lint run --timeout 5m
-
-  build_docker:
-    executor: golang-exec
-    steps:
-      - checkout
-      - run:
-          name: Build binary for Docker
-          command: go build -o helm-release-pruner ./cmd/pruner
-      - setup_remote_docker:
-          docker_layer_caching: true
-      - run:
-          name: Build Docker Image
-          command: docker build -t helm-release-pruner:test .
-
-  push_docker:
-    executor: golang-exec
-    working_directory: /home/circleci/project
-    steps:
-      - checkout
-      - run:
-          name: Build binary for Docker
-          command: CGO_ENABLED=0 GOOS=linux go build -o helm-release-pruner ./cmd/pruner
-      - setup_remote_docker:
-          docker_layer_caching: true
-      - *install_vault_apt
-      - rok8s/get_vault_env:
-          vault_path: repo/global/env
-      - rok8s/set_env
-      - rok8s/docker_login:
-          registry: "quay.io"
-          username: $FAIRWINDS_QUAY_USER
-          password-variable: FAIRWINDS_QUAY_TOKEN
-      - run:
-          name: Build and push image to quay
+          name: golangci-lint
           command: |
-            docker build -t quay.io/fairwinds/helm-release-pruner:snapshot .
-            docker push quay.io/fairwinds/helm-release-pruner:snapshot
-
-  release:
-    working_directory: /home/circleci/project
-    resource_class: large
-    shell: /bin/bash
-    docker:
-      - image: goreleaser/goreleaser:v2.18.0
-    steps:
-      - checkout
-      - *install_vault_alpine
-      - rok8s/get_vault_env:
-          vault_path: repo/global/env
-      - rok8s/set_env
-      - setup_remote_docker:
-          version: docker27
-      - rok8s/docker_login:
-          registry: "quay.io"
-          username: $FAIRWINDS_QUAY_USER
-          password-variable: FAIRWINDS_QUAY_TOKEN
+            curl -fsSL -o golangci-lint.tar.gz https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-linux-amd64.tar.gz
+            echo '2277d43b98ec0054280f2ac26b53268bae97682444678a59a657dd565da021d6  golangci-lint.tar.gz' | sha256sum -c
+            tar -xzf golangci-lint.tar.gz
+            mv golangci-lint-2.13.2-linux-amd64/golangci-lint "$(go env GOPATH)/bin/golangci-lint"
+            golangci-lint run --timeout 5m
       - run:
-          name: docker login Google Artifact Registry
+          name: test
           command: |
-            docker login -u _json_key -p "$(echo $GCP_ARTIFACTREADWRITE_JSON_KEY | base64 -d)" us-docker.pkg.dev
-      - run: echo 'export GORELEASER_CURRENT_TAG="${CIRCLE_TAG}"' >> $BASH_ENV
-      - run: goreleaser release --clean
-
+            go test -v -coverprofile=coverage.txt -covermode=atomic ./...
+            go vet ./...
   snapshot:
-    working_directory: /home/circleci/project
+    machine:
+      image: ubuntu-2204:current
     resource_class: large
-    docker:
-      - image: goreleaser/goreleaser:v2.18.0
     steps:
       - checkout
-      - setup_remote_docker:
-          version: docker27
-      - run: goreleaser release --snapshot --clean --skip=sign
+      - *setup_qemu_binfmt
+      - run:
+          name: Run GoReleaser snapshot
+          command: |
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$(pwd):/workspace" -w /workspace \
+              -e CIRCLE_SHA1 \
+              -e CIRCLE_BRANCH \
+              -e CIRCLE_TAG \
+              goreleaser/goreleaser:v2.18.1 release --snapshot --skip=sign
       - store_artifacts:
           path: dist
           destination: snapshot
+  release:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large
+    shell: /bin/bash
+    steps:
+      - checkout
+      - *install_vault_machine
+      - rok8s/get_vault_env:
+          vault_path: repo/global/env
+      - run:
+          name: docker login Google Artifact Registry
+          command: |
+            echo "$GCP_ARTIFACTREADWRITE_JSON_KEY" | base64 -d | docker login -u _json_key --password-stdin us-docker.pkg.dev
+      - *setup_qemu_binfmt
+      - run:
+          name: Run GoReleaser release
+          command: |
+            export GORELEASER_CURRENT_TAG="${CIRCLE_TAG}"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$(pwd):/workspace" -w /workspace \
+              -v "${HOME}/.docker:/root/.docker" \
+              -e GORELEASER_CURRENT_TAG \
+              -e CIRCLE_TAG \
+              -e CIRCLE_SHA1 \
+              -e GO111MODULE=on \
+              -e GITHUB_TOKEN \
+              -e VAULT_ADDR \
+              -e VAULT_TOKEN \
+              goreleaser/goreleaser:v2.18.1 release
 
 workflows:
   version: 2
-  ci:
+  test_and_build:
     jobs:
-      - test
-      - lint
-      - build_docker:
-          requires:
-            - test
-            - lint
+      - test:
+          filters:
+            tags:
+              ignore: /.*/
       - snapshot:
           requires:
             - test
@@ -178,38 +134,31 @@ workflows:
             tags:
               ignore: /.*/
       - rok8s/kubernetes_e2e_tests:
-          name: "e2e-kubernetes-1.33"
-          kind_node_image: "kindest/node:v1.33.12"
-          <<: *e2e_configuration
-      - rok8s/kubernetes_e2e_tests:
-          name: "e2e-kubernetes-1.34"
-          kind_node_image: "kindest/node:v1.34.11"
-          <<: *e2e_configuration
-      - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.35"
-          kind_node_image: "kindest/node:v1.35.8"
+          kind_node_image: "kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0"
           <<: *e2e_configuration
       - rok8s/kubernetes_e2e_tests:
           name: "e2e-kubernetes-1.36"
-          kind_node_image: "kindest/node:v1.36.4"
+          kind_node_image: "kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed"
           <<: *e2e_configuration
-      - push_docker:
-          requires:
-            - e2e-kubernetes-1.33
-            - e2e-kubernetes-1.34
-            - e2e-kubernetes-1.35
-          context: org-global
-          filters:
-            branches:
-              ignore:
-                - /pull\/[0-9]+/
-
+      - rok8s/kubernetes_e2e_tests:
+          name: "e2e-kubernetes-1.37"
+          kind_node_image: "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
+          <<: *e2e_configuration
   release:
     jobs:
+      - test:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /v.*/
       - release:
+          requires:
+            - test
           context: org-global
           filters:
             branches:
               ignore: /.*/
             tags:
-              only: /.*/
+              only: /v.*/
