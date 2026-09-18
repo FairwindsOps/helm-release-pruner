@@ -150,10 +150,18 @@ install_release() {
     local name="$1"
     local namespace="$2"
     local chart_dir="${3:-/tmp/test-chart}"
-    
+    local labels="${4:-}"
+
     kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
-    helm upgrade --install "$name" "$chart_dir" -n "$namespace" --wait --timeout 60s >/dev/null 2>&1
-    log_info "  Installed release '$name' in '$namespace'"
+    local label_args=()
+    if [[ -n "$labels" ]]; then
+        IFS=',' read -ra label_list <<< "$labels"
+        for label in "${label_list[@]}"; do
+            label_args+=(--labels "$label")
+        done
+    fi
+    helm upgrade --install "$name" "$chart_dir" -n "$namespace" --wait --timeout 60s "${label_args[@]}" >/dev/null 2>&1
+    log_info "  Installed release '$name' in '$namespace'${labels:+ (labels: $labels)}"
 }
 
 run_pruner() {
@@ -391,6 +399,46 @@ test_max_releases_to_keep() {
     fi
 }
 
+test_label_filter() {
+    log_step "TEST: Label Filter"
+    log_info "Verifies --label-filter only prunes releases with matching labels"
+
+    install_release "label-target" "test-label-filter-ns" "" "gc-policy=weekly"
+    install_release "label-keep" "test-label-filter-ns"
+
+    sleep 2
+    run_pruner --label-filter="gc-policy=weekly" --older-than=1s --namespace-filter="^test-label-filter-"
+
+    if assert_release_not_exists "label-target" "test-label-filter-ns" && \
+       assert_release_exists "label-keep" "test-label-filter-ns"; then
+        log_info "✓ TEST PASSED: Label filter prunes only labeled releases"
+        ((++TESTS_PASSED))
+    else
+        log_error "✗ TEST FAILED: Label filter"
+        ((++TESTS_FAILED))
+    fi
+}
+
+test_label_exclude() {
+    log_step "TEST: Label Exclude"
+    log_info "Verifies --label-exclude skips releases with matching labels"
+
+    install_release "label-ex-delete" "test-label-exclude-ns"
+    install_release "label-ex-keep" "test-label-exclude-ns" "" "protected=true"
+
+    sleep 2
+    run_pruner --label-exclude="protected=true" --older-than=1s --namespace-filter="^test-label-exclude-"
+
+    if assert_release_not_exists "label-ex-delete" "test-label-exclude-ns" && \
+       assert_release_exists "label-ex-keep" "test-label-exclude-ns"; then
+        log_info "✓ TEST PASSED: Label exclude skips protected releases"
+        ((++TESTS_PASSED))
+    else
+        log_error "✗ TEST FAILED: Label exclude"
+        ((++TESTS_FAILED))
+    fi
+}
+
 # ============================================================================
 # Main
 # ============================================================================
@@ -443,7 +491,11 @@ main() {
     echo ""
     test_orphan_namespace_cleanup
     echo ""
-    
+    test_label_filter
+    echo ""
+    test_label_exclude
+    echo ""
+
     # Summary
     log_info "=============================================="
     log_info "  Test Results"
