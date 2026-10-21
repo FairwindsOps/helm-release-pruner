@@ -12,6 +12,8 @@ This directory contains automated E2E tests for helm-release-pruner using kind (
 | **Older Than** | `--older-than` deletes releases older than threshold |
 | **Namespace Filter** | `--namespace-filter` only affects matching namespaces |
 | **Release Exclude** | `--release-exclude` skips matching releases |
+| **Label Filter** | `--label-filter` only prunes releases with matching labels |
+| **Label Exclude** | `--label-exclude` skips releases with matching labels |
 | **Preserve Namespace** | `--preserve-namespace` keeps NS after release deletion |
 | **Max Releases** | `--max-releases-to-keep` keeps only N newest releases |
 | **Orphan Cleanup** | `--cleanup-orphan-namespaces` deletes empty namespaces |

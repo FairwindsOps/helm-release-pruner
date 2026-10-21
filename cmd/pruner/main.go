@@ -43,6 +43,8 @@ func newRootCmd() *cobra.Command {
 		namespaceExclude           string
 		orphanNamespaceFilter      string
 		orphanNamespaceExclude     string
+		labelFilter                []string
+		labelExclude               []string
 		healthAddr                 string
 		deleteRateLimit            time.Duration
 		additionalSystemNamespaces string
@@ -123,14 +125,30 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 				opts.OrphanNamespaceExclude = re
 			}
 
+			for _, s := range labelFilter {
+				sel, err := parseLabelSelector(s)
+				if err != nil {
+					return fmt.Errorf("invalid --label-filter %q: %w", s, err)
+				}
+				opts.LabelFilter = append(opts.LabelFilter, sel)
+			}
+
+			for _, s := range labelExclude {
+				sel, err := parseLabelSelector(s)
+				if err != nil {
+					return fmt.Errorf("invalid --label-exclude %q: %w", s, err)
+				}
+				opts.LabelExclude = append(opts.LabelExclude, sel)
+			}
+
 			if opts.CleanupOrphanNamespaces && opts.OrphanNamespaceFilter == nil {
 				fmt.Fprintln(os.Stderr, "WARNING: --cleanup-orphan-namespaces requires --orphan-namespace-filter for safety; orphan cleanup disabled")
 				opts.CleanupOrphanNamespaces = false
 			}
 
 			hasReleasePruning := opts.OlderThan > 0 || opts.MaxReleasesToKeep > 0 ||
-				opts.ReleaseFilter != nil || opts.NamespaceFilter != nil ||
-				opts.ReleaseExclude != nil || opts.NamespaceExclude != nil
+				opts.ReleaseFilter != nil || opts.NamespaceFilter != nil || len(opts.LabelFilter) > 0 ||
+				opts.ReleaseExclude != nil || opts.NamespaceExclude != nil || len(opts.LabelExclude) > 0
 
 			if !hasReleasePruning && !opts.CleanupOrphanNamespaces {
 				return fmt.Errorf("at least one of release pruning filters or --cleanup-orphan-namespaces (with --orphan-namespace-filter) must be specified")
@@ -200,6 +218,10 @@ have no Helm releases. Runs continuously and prunes at configurable intervals.`,
 		"Regex filter to exclude releases (matching releases are skipped)")
 	flags.StringVar(&namespaceExclude, "namespace-exclude", "",
 		"Regex filter to exclude namespaces (matching namespaces are skipped)")
+	flags.StringArrayVar(&labelFilter, "label-filter", nil,
+		"Label selector a release must match to be considered (key=regex or key; omitting value matches any; repeatable, AND semantics)")
+	flags.StringArrayVar(&labelExclude, "label-exclude", nil,
+		"Label selector that excludes matching releases (key=regex or key; omitting value matches any; repeatable, AND semantics)")
 	flags.BoolVar(&opts.PreserveNamespace, "preserve-namespace", false,
 		"Do not delete namespaces even when empty after release deletion")
 
@@ -283,6 +305,25 @@ func startHealthServer(addr string, p *pruner.Pruner) *http.Server {
 	}()
 
 	return server
+}
+
+// parseLabelSelector parses a label selector string into a LabelSelector.
+func parseLabelSelector(s string) (pruner.LabelSelector, error) {
+	if s == "" {
+		return pruner.LabelSelector{}, fmt.Errorf("empty label selector")
+	}
+	key, pattern, found := strings.Cut(s, "=")
+	if key == "" {
+		return pruner.LabelSelector{}, fmt.Errorf("label key must not be empty in %q", s)
+	}
+	if !found {
+		pattern = ".*"
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return pruner.LabelSelector{}, fmt.Errorf("invalid label value regex %q: %w", pattern, err)
+	}
+	return pruner.LabelSelector{Key: key, Value: re}, nil
 }
 
 // parseDuration parses duration strings like "336h" or "2w" or "30d"

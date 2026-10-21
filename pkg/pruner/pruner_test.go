@@ -33,12 +33,19 @@ func mockRelease(name, namespace string, lastDeployed time.Time) *releasev1.Rele
 	}
 }
 
+// withLabels returns a copy of the release with the given labels set.
+func withLabels(rel *releasev1.Release, labels map[string]string) *releasev1.Release {
+	cp := *rel
+	cp.Labels = labels
+	return &cp
+}
+
 func TestFilterReleases(t *testing.T) {
 	now := time.Now()
 	releases := []*releasev1.Release{
-		mockRelease("feature-abc-web", "feature-abc", now),
-		mockRelease("feature-xyz-web", "feature-xyz", now),
-		mockRelease("production-web", "production", now),
+		withLabels(mockRelease("feature-abc-web", "feature-abc", now), map[string]string{"ephemeral": "true", "gc-policy": "weekly"}),
+		withLabels(mockRelease("feature-xyz-web", "feature-xyz", now), map[string]string{"ephemeral": "true", "gc-policy": "monthly"}),
+		withLabels(mockRelease("production-web", "production", now), map[string]string{"env": "production"}),
 		mockRelease("staging-web", "staging", now),
 		mockRelease("feature-permanent-web", "feature-permanent", now),
 	}
@@ -95,6 +102,69 @@ func TestFilterReleases(t *testing.T) {
 			},
 			expectedCount:    2,
 			expectedReleases: []string{"feature-abc-web", "feature-xyz-web"},
+		},
+		{
+			name: "label filter - only gc-policy=weekly",
+			opts: Options{
+				LabelFilter: []LabelSelector{{Key: "gc-policy", Value: regexp.MustCompile("weekly")}},
+			},
+			expectedCount:    1,
+			expectedReleases: []string{"feature-abc-web"},
+		},
+		{
+			name: "label filter - existence only (match any value)",
+			opts: Options{
+				LabelFilter: []LabelSelector{{Key: "ephemeral", Value: regexp.MustCompile(".*")}},
+			},
+			expectedCount:    2,
+			expectedReleases: []string{"feature-abc-web", "feature-xyz-web"},
+		},
+		{
+			name: "label exclude - exclude env=production",
+			opts: Options{
+				LabelExclude: []LabelSelector{{Key: "env", Value: regexp.MustCompile("production")}},
+			},
+			expectedCount:    4,
+			expectedReleases: []string{"feature-abc-web", "feature-xyz-web", "staging-web", "feature-permanent-web"},
+		},
+		{
+			name: "label filter - multiple selectors AND semantics",
+			opts: Options{
+				LabelFilter: []LabelSelector{
+					{Key: "ephemeral", Value: regexp.MustCompile(".*")},
+					{Key: "gc-policy", Value: regexp.MustCompile("weekly")},
+				},
+			},
+			expectedCount:    1,
+			expectedReleases: []string{"feature-abc-web"},
+		},
+		{
+			name: "label exclude - multiple selectors AND semantics",
+			opts: Options{
+				LabelExclude: []LabelSelector{
+					{Key: "ephemeral", Value: regexp.MustCompile(".*")},
+					{Key: "gc-policy", Value: regexp.MustCompile("weekly")},
+				},
+			},
+			expectedCount:    4,
+			expectedReleases: []string{"feature-xyz-web", "production-web", "staging-web", "feature-permanent-web"},
+		},
+		{
+			name: "label filter AND label exclude combined",
+			opts: Options{
+				LabelFilter:  []LabelSelector{{Key: "ephemeral", Value: regexp.MustCompile(".*")}},
+				LabelExclude: []LabelSelector{{Key: "gc-policy", Value: regexp.MustCompile("monthly")}},
+			},
+			expectedCount:    1,
+			expectedReleases: []string{"feature-abc-web"},
+		},
+		{
+			name: "label filter with no matching releases",
+			opts: Options{
+				LabelFilter: []LabelSelector{{Key: "nonexistent", Value: regexp.MustCompile("value")}},
+			},
+			expectedCount:    0,
+			expectedReleases: []string{},
 		},
 	}
 
@@ -471,6 +541,93 @@ func TestCalculateBackoff_ExponentialGrowth(t *testing.T) {
 	}
 }
 
+func TestReleaseMatchesLabelSelectors(t *testing.T) {
+	now := time.Now()
+	rel := withLabels(mockRelease("app", "ns", now), map[string]string{
+		"env":       "preview",
+		"gc-policy": "weekly",
+		"ephemeral": "true",
+	})
+	noLabels := mockRelease("app-no-labels", "ns", now)
+
+	tests := []struct {
+		name      string
+		release   *releasev1.Release
+		selectors []LabelSelector
+		want      bool
+	}{
+		{
+			name:      "empty selectors always matches",
+			release:   rel,
+			selectors: nil,
+			want:      true,
+		},
+		{
+			name:      "key=value match",
+			release:   rel,
+			selectors: []LabelSelector{{Key: "env", Value: regexp.MustCompile("preview")}},
+			want:      true,
+		},
+		{
+			name:      "key=value no match - wrong value",
+			release:   rel,
+			selectors: []LabelSelector{{Key: "env", Value: regexp.MustCompile("production")}},
+			want:      false,
+		},
+		{
+			name:      "existence only - key present",
+			release:   rel,
+			selectors: []LabelSelector{{Key: "ephemeral", Value: regexp.MustCompile(".*")}},
+			want:      true,
+		},
+		{
+			name:      "existence only - key absent",
+			release:   rel,
+			selectors: []LabelSelector{{Key: "nonexistent", Value: regexp.MustCompile(".*")}},
+			want:      false,
+		},
+		{
+			name:    "multiple selectors - all match",
+			release: rel,
+			selectors: []LabelSelector{
+				{Key: "env", Value: regexp.MustCompile("preview")},
+				{Key: "gc-policy", Value: regexp.MustCompile("weekly")},
+			},
+			want: true,
+		},
+		{
+			name:    "multiple selectors - partial match",
+			release: rel,
+			selectors: []LabelSelector{
+				{Key: "env", Value: regexp.MustCompile("preview")},
+				{Key: "gc-policy", Value: regexp.MustCompile("monthly")},
+			},
+			want: false,
+		},
+		{
+			name:      "release with no labels - key=value selector",
+			release:   noLabels,
+			selectors: []LabelSelector{{Key: "env", Value: regexp.MustCompile("preview")}},
+			want:      false,
+		},
+		{
+			name:      "release with no labels - existence selector",
+			release:   noLabels,
+			selectors: []LabelSelector{{Key: "ephemeral", Value: regexp.MustCompile(".*")}},
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := releaseMatchesLabelSelectors(tt.release, tt.selectors)
+			if got != tt.want {
+				t.Errorf("releaseMatchesLabelSelectors() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCalculateBackoff_NeverExceedsMax(t *testing.T) {
 	// Test a range of values to ensure we never exceed maxBackoff
 	for failures := 0; failures <= 1000; failures++ {
@@ -520,6 +677,16 @@ func TestHasReleasePruningFilters(t *testing.T) {
 		{
 			name:     "only NamespaceExclude",
 			opts:     Options{NamespaceExclude: regexp.MustCompile(".*")},
+			expected: true,
+		},
+		{
+			name:     "only LabelFilter",
+			opts:     Options{LabelFilter: []LabelSelector{{Key: "env", Value: regexp.MustCompile("preview")}}},
+			expected: true,
+		},
+		{
+			name:     "only LabelExclude",
+			opts:     Options{LabelExclude: []LabelSelector{{Key: "protected", Value: regexp.MustCompile(".*")}}},
 			expected: true,
 		},
 		{
